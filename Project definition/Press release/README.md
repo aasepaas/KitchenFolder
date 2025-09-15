@@ -1,27 +1,26 @@
-# Square kitchen towels handler
-Automation of folding square kitchen towels
+# LANDUWASCO ANNOUNCES NEW MACHINE TO LET KITCHEN TEAMS AUTOMATE SQUARE KITCHEN TOWEL HANDLING FOR GREATER EFFICIENCY
 
-## Project members:
-- Aashish Swami
-- Bryan Smit
-- Saleem Al-Homidi
-- Robert Hulsbergen
+## Subtitle  
+Innovative system will expand towel options, reducing manual labour and can be directly used with existing folding machines  
 
-## Lay-out explanation
-### "Project definition" folder
-In this folder important documents that explain our process of this project. The following documents can be found in the folder
--  Press release
-   - Word document with the "working backwords" approach.
--  I/O diagram
-   - Input/Output diagram that shows the workflow. This will be done for the current and future situation.
--  Layout drawing of the workspace
-   - A simple sketch that depicts the workspace of the process. This will be done for the current and future situation. 
--  List of (borrowed) items
-   - Logistics of items that are borrowed from the school lab or company.
--  Safety declaration
-   - Declaration of safety that will be signed by the group.
--  Photos of the current situation
-   - Photos of the current workspace.
+## Date  
+Monday, 3 November  
 
-### Meetings
-To document all meetings with the company and teacher, all the documents will be placed there. Both the agendas and the meeting notes can be found in the folder.
+## Intro paragraph  
+Landuwasco announces new machine in development to automate the process of handling square towels. This new machine can directly be integrated with existing folding machine by feeding it towels. Incorporating these machines eliminates manual handling in the square towel folding process. For kitchens, laundries and facilities searching for greater speed, efficiency and reducing costs in handling towels.  
+
+## Problem paragraph  
+1. **Handling square towels**  
+   Square towels can’t be automated with current machines. This forces staff to fold them by hand, reducing efficiency and increasing labour.  
+
+2. **Limited towel options**  
+   Companies are forced to use rectangular towels, preventing them choosing the right shape that suits their needs.  
+
+## Solution paragraph *(only add at the end of the project)*  
+Describe how your product/service elegantly solves the problem. Give a brief overview of how it works, and then go through and talk about how it solves each problem you listed above.  
+
+## How the product/service works *(only add at the end of the project)*  
+Describe what a customer has to do to start using the product/service and how it works. Go into enough detail to give them confidence it actually solves the problem.  
+
+## Customer quote *(only add after the end demonstration)*  
+Get a quote from your customer. The customer should describe their pain point or the goal they need to accomplish, and then how the product you launched enables them to do so.  
