@@ -1,0 +1,112 @@
+import pyrealsense2 as rs
+import numpy as np
+import cv2
+from ultralytics import YOLO
+import torch
+from pathlib import Path
+from datetime import datetime
+import os
+import time
+from opcua import Client, ua
+
+# config paths en other settings
+MODEL_PATH = r"C:\Users\aashi\PycharmProjects\PythonProject\runs\detect\train_v8\weights\best.pt"
+INFER_IMG_SIZE = (1280, 736)
+DISPLAY_SCALE = 0.7
+SAVE_DIR = r"C:/Users/aashi/Downloads/nieuwe dataset met camera2"
+Path(SAVE_DIR).mkdir(parents=True, exist_ok=True)
+
+# device settings for now cpu but if gpu use 0 or 1
+device = "cpu"
+use_half = torch.cuda.is_available()
+
+print("Device:", device, "half:", use_half)
+
+# Load model
+model = YOLO(MODEL_PATH)
+
+# start the realsense camera
+pipe = rs.pipeline()
+cfg = rs.config()
+cfg.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 15)
+pipe.start(cfg)
+prev_time = time.perf_counter()
+
+# OPC UA connection settings
+url = "opc.tcp://192.168.10.167:4840"
+client = Client(url)
+
+try:
+    client.connect()
+    print("✅ Connected to OPC UA Server")
+
+    # Use correct NodeId with |var|
+    x_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.Xhoek")
+    y_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.Yhoek")
+    print("Current values:")
+    print(f"Xhoek: {x_node.get_value()}")
+    print(f"Yhoek: {y_node.get_value()}")
+    while True:
+        frames = pipe.wait_for_frames()
+        color_frame = frames.get_color_frame()
+        if not color_frame:
+            continue
+        color_image = np.asanyarray(color_frame.get_data())
+
+        # run the model and get the first element ([0])
+        results = model(color_image, imgsz=INFER_IMG_SIZE, device=device, half=use_half)[0]
+
+        # annotated(boxes) image will be plotted/shown
+        annotated = results.plot() if results is not None else color_image.copy()
+
+        # Bbox- en klasse-extractie (print naar console)
+        boxes = getattr(results, "boxes", None)  # none if there are no detection
+        xpoint = None
+        ypoint = None
+        if boxes is not None and len(boxes) > 0:
+            counter = 0
+            # For loop prints the coords from highest confidence to lowest
+            for i in range(len(boxes.xyxy)):
+                # xyxy numpy ints: [x1, y1, x2, y2]
+                xyxy = boxes.xyxy[i].cpu().numpy().astype(int)
+                x1, y1, x2, y2 = int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])
+                conf = float(boxes.conf[i])
+                cls_id = int(boxes.cls[i])
+                cls_name = model.names.get(cls_id, str(cls_id))
+                if counter == 0:
+                    xpoint = int((xyxy[0] + xyxy[2])/2)
+                    ypoint = int((xyxy[1] + xyxy[3])/2)
+                # Print the confidence and coordinates
+                print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] {cls_name} conf={conf:.2f} bbox=(x1={x1}, y1={y1}, x2={x2}, y2={y2})")
+
+        # Schaal alleen voor display
+        disp = annotated.copy()
+    
+        if xpoint is not None and ypoint is not None:
+            disp = cv2.circle(disp, center=(xpoint, ypoint), radius=2   , color=(0, 0, 255), thickness=1)
+            print(f"Pickup point: x1={xpoint}, y1={ypoint}")
+            x_node.set_value(xpoint, ua.VariantType.Int16)
+            y_node.set_value(ypoint, ua.VariantType.Int16)
+            print(f"Sent to PLC -> X: {x_node.get_value()}, Y: {y_node.get_value()}")
+
+
+        cv2.imshow("YOLO RealSense", disp)
+
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('q'):
+            break
+
+        if key == ord('s'):
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+            save_path = os.path.join(SAVE_DIR, f"unannotated_{ts}.jpg")
+            if cv2.imwrite(save_path, color_image):
+                print("✅ Saved unannotated image:", save_path)
+            else:
+                print("❌ Failed to save image:", save_path)
+
+finally:
+    pipe.stop()
+    cv2.destroyAllWindows()
+
+    client.disconnect()
+    print("🔌 Disconnected from OPC UA Server")
