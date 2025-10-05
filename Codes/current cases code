@@ -1,0 +1,235 @@
+CASE Steps OF
+    0: // Reset/Init
+	
+        CornerAngle := 0;
+        FirstCornerVisible := FALSE;
+        SecondCornerVisible := FALSE;
+		ConveyorBelt := FALSE;
+        TowelVisible := FALSE;
+        XfirstCorner := 0;
+        YfirstCorner := 0;
+        XsecondCorner := 0;
+        YsecondCorner := 0;
+        XarmPosition := 0;
+        YarmPosition := 0;
+        GrabbedFirstCorner := FALSE;
+        GrabbedSecondCorner := FALSE;
+        TowelBlowerFromTable := FALSE;
+        MoveInProgress := FALSE;
+		VelocityGantry := 30;
+		AccelerationGantry := 30;
+        Steps := 1;
+		CheckForCorner := FALSE;
+		TakeLatestPicture := FALSE;
+
+
+    1: // Wait for towel to be placed on conveyor belt
+		//Conveyor code 
+		//Robot to non camera visible place
+		ConveyorBelt := TRUE;
+        IF ConveyorBelt THEN
+			CheckForCorner := TRUE;
+            Steps := 2;
+        END_IF
+
+    2: // Wait for towel to be visible
+	//If needed we can work on fixed timer for conveyor to place it under camera, so we dont worry about the camera variables too much
+        IF TowelVisible THEN
+            Steps := 3;
+        END_IF
+
+    3: // Wait for conveyor belt to turn off
+	    TON_001(IN := StartTimer, PT := T#5S);
+   	    TimerDone := TON_001.Q;
+		IF TimerDone THEN
+			ConveyorBelt := FALSE;
+		END_IF
+        IF NOT ConveyorBelt  THEN
+			TakeLatestPicture := TRUE;
+            Steps := 4;
+        END_IF
+
+    4: // Wait for first corner to be visible
+        IF FirstCornerVisible THEN
+            Steps := 5;
+        ELSE
+			TON_005(IN := StartTimer, PT := T#5S);
+   	    	TimerDone := TON_005.Q;
+			IF FirstCornerVisible AND TimerDone THEN
+				Steps := 5;
+			ELSE
+				  Steps := 105; // Error
+			END_IF
+        END_IF
+
+    5: 
+// Move to first corner
+   		//targetPos.c.x := XfirstCorner;
+    	//targetPos.c.y := YfirstCorner;
+    	//targetPos.c.z := 0.0;
+//         IF NOT MoveInProgress THEN
+//             fbRobotMotion.Vel(1, 200.0);
+//             fbRobotMotion.Acc(1, 500.0);
+//             fbRobotMotion.Buffer_Mode(0);
+//             fbRobotMotion.Orientation_Mode(0);
+//             fbRobotMotion.Lin(targetPos);
+//             MoveInProgress := TRUE;
+//         END_IF
+       // IF fbRobotMotion.MotionDone THEN
+//             XarmPosition := XfirstCorner;
+//             YarmPosition := YfirstCorner;
+//             MoveInProgress := FALSE;
+//             Steps := 6;
+//         ELSIF fbRobotMotion.SW_Error THEN
+//             MoveInProgress := FALSE;
+//             Steps := 999; // Error
+//         END_IF
+		TON_002(IN := StartTimer, PT := T#5S);
+   	    TimerDone := TON_002.Q;
+		IF TimerDone THEN
+			reusable := TRUE;
+		END_IF
+        IF reusable  THEN
+			reusable := FALSE;
+            Steps := 6;
+        END_IF
+			
+
+
+    6:
+        IF GrabbedSecondCorner THEN
+             Steps := 7;
+        END_IF
+// 
+     7: // Move to table corner
+// 		targetPos.c.x := XtableCorner;
+//     	targetPos.c.y := YtableCorner;
+//     	targetPos.c.z := 0.0;
+//         IF NOT MoveInProgress THEN
+//             fbRobotMotion.Vel(1, 200.0);
+//             fbRobotMotion.Acc(1, 500.0);
+//             fbRobotMotion.Buffer_Mode(0);
+//             fbRobotMotion.Orientation_Mode(0);
+//             fbRobotMotion.Lin(targetPos);
+//             MoveInProgress := TRUE;
+//         END_IF
+//         IF MotionDonetrue THEN
+//             XarmPosition := XtableCorner;
+//             YarmPosition := YtableCorner;
+//             MoveInProgress := FALSE;
+//             Steps := 8;
+//         ELSIF SW_Error_true THEN
+//             MoveInProgress := FALSE;
+//             Steps := 999;
+//         END_IF
+		TON_003(IN := StartTimer, PT := T#5S);
+   	    TimerDone := TON_003.Q;
+		IF TimerDone THEN
+			reusable := TRUE;
+		END_IF
+        IF reusable  THEN
+			reusable := FALSE;
+            Steps := 8;
+        END_IF
+
+    8: // Move to linear axis coords
+
+// 		targetPos.c.x := XcoordsArmLinearAxis;
+//     	targetPos.c.y := YcoordsArmLinearAxis;
+//     	targetPos.c.z := 0.0;
+//         IF NOT MoveInProgress THEN
+//             fbRobotMotion.Vel(1, 200.0);
+//             fbRobotMotion.Acc(1, 500.0);
+//             fbRobotMotion.Buffer_Mode(0);
+//             fbRobotMotion.Orientation_Mode(0);
+//             fbRobotMotion.Lin(targetPos);
+//             MoveInProgress := TRUE;
+//         END_IF
+//         IF fbRobotMotion.MotionDone THEN
+//             XarmPosition := XcoordsArmLinearAxis;
+//             YarmPosition := YcoordsArmLinearAxis;
+//             MoveInProgress := FALSE;
+//             Steps := 9;
+//         ELSIF fbRobotMotion.SW_Error THEN
+//             MoveInProgress := FALSE;
+//             Steps := 999;
+//         END_IF
+		TON_004(IN := StartTimer, PT := T#5S);
+   	    TimerDone := TON_004.Q;
+		IF TimerDone THEN
+			reusable := TRUE;
+		END_IF
+        IF reusable  THEN
+			reusable := FALSE;
+            Steps := 9;
+        END_IF
+
+
+    9:
+// 		targetPos.c.x := XcoordsArmLinearAxis;
+//     	targetPos.c.y := YcoordsArmLinearAxis;
+//     	targetPos.c.z := 0.0;
+//         IF NOT MoveInProgress THEN
+//             fbRobotMotion.Vel(1, 200.0);
+//             fbRobotMotion.Acc(1, 500.0);
+//             fbRobotMotion.Buffer_Mode(0);
+//             fbRobotMotion.Orientation_Mode(0);
+//             fbRobotMotion.Lin(targetPos);
+//             MoveInProgress := TRUE;
+//         END_IF
+//         IF fbRobotMotion.MotionDone THEN
+//             XarmPosition := XcoordsArmLinearAxis;
+//             YarmPosition := YcoordsArmLinearAxis;
+//             MoveInProgress := FALSE;
+//             Steps := 9;
+//         ELSIF fbRobotMotion.SW_Error THEN
+//             MoveInProgress := FALSE;
+//             Steps := 999;
+//         END_IF
+        IF SecondCornerVisible THEN
+            Steps := 10;
+        END_IF
+
+    10:
+        IF GrabbedFirstCorner THEN
+            Steps := 11;
+        END_IF
+
+    11: // Move to end of table
+// 		targetPos.c.x := XcoordsEndOfTable;
+//     	targetPos.c.y := YcoordsEndOfTable;
+//     	targetPos.c.z := 0.0;
+//         IF NOT MoveInProgress THEN
+//             fbRobotMotion.Vel(1, 200.0);
+//             fbRobotMotion.Acc(1, 500.0);
+//             fbRobotMotion.Buffer_Mode(0);
+//             fbRobotMotion.Orientation_Mode(0);
+//             fbRobotMotion.Lin(targetPos);
+//             MoveInProgress := TRUE;
+//         END_IF
+        IF TRUE THEN
+            XarmPosition := XcoordsEndOfTable;
+            YarmPosition := YcoordsEndOfTable;
+            MoveInProgress := FALSE;
+            Steps := 12;
+
+        END_IF
+
+    12:
+        IF (NOT GrabbedFirstCorner) AND (NOT GrabbedCornerArmLinearAxis) THEN
+            Steps := 1;
+        END_IF
+
+    105: // Coner not found, blow towel off table
+		//Blow code
+		IF NOT TowelVisible THEN
+			Steps := 106;
+		END_IF
+		
+	106: // Go back to step 0/begin
+		Steps := 0;
+
+    999: //Basic error handling, back to step 0
+        Steps := 0;
+
+END_CASE
