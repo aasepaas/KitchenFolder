@@ -3,110 +3,162 @@ import numpy as np
 import cv2
 from ultralytics import YOLO
 import torch
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 import os
 import time
 from opcua import Client, ua
 
-# config paths en other settings
-MODEL_PATH = r"C:\Users\aashi\PycharmProjects\PythonProject\runs\detect\train_v8\weights\best.pt"
-INFER_IMG_SIZE = (1280, 736)
-DISPLAY_SCALE = 0.7
-SAVE_DIR = r"C:/Users/aashi/Downloads/nieuwe dataset met camera2"
-Path(SAVE_DIR).mkdir(parents=True, exist_ok=True)
-
-# device settings for now cpu but if gpu use 0 or 1
+# AI, Savefolder and rendering config
+myModel = r"C:\Users\aashi\PycharmProjects\PythonProject\runs\detect\train_v8\weights\best.pt"
+saveFolder = r"C:\AI-Hoeken_towels\review"
+URL_OPC = "opc.tcp://localhost:4840"
+imgSize = (1280, 736)
 device = "cpu"
 use_half = torch.cuda.is_available()
+Path(saveFolder).mkdir(parents=True, exist_ok=True)
+model = YOLO(myModel)
 
-print("Device:", device, "half:", use_half)
-
-# Load model
-model = YOLO(MODEL_PATH)
-
-# start the realsense camera
+# Intel realsense camera setup
 pipe = rs.pipeline()
 cfg = rs.config()
 cfg.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 15)
 pipe.start(cfg)
-prev_time = time.perf_counter()
+time.sleep(1)
 
-# OPC UA connection settings
-url = "opc.tcp://192.168.10.167:4840"
-client = Client(url)
+# OPC Ua client connection setup
+client = Client(URL_OPC)
+client.connect()
+print("Connected to OPC UA server")
 
+# Get all the nodes needed for the corners
+# DONT FORGET TO CHANGE THE NODE ADRES WHEN USING OTHER PLC
+x_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.XfirstCorner")
+y_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.YfirstCorner")
+angle_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.CornerAngle")
+check_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.CheckForCorner")
+cornerFound_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.FirstCornerVisible")
+
+# Function that detects the corner and returns the pickup coordinate and angle
+def detect_corner_and_angle(image):
+    results = model(image, imgsz=imgSize, device=device, half=use_half)[0]
+    boxes = getattr(results, "boxes", None)
+    # If no corners return everthing as none
+    annotated = image.copy()
+    if boxes is None or len(boxes) == 0:
+        return None, None, None, annotated
+
+    # Loop through detections(boxes), highest confidence first
+    for i in range(len(boxes.xyxy)):
+        xyxy = boxes.xyxy[i].cpu().numpy().astype(int)
+        x1, y1, x2, y2 = xyxy
+        conf = float(boxes.conf[i])
+        cls_id = int(boxes.cls[i])
+        cls_name = model.names.get(cls_id, str(cls_id))
+
+        # Draw bounding box around the corner
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.putText(annotated, f"{cls_name} {conf:.2f}", (x1, y1 - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+    # Focus only on the most confident detection for the angle
+    xyxy = boxes.xyxy[0].cpu().numpy().astype(int)
+    x1, y1, x2, y2 = xyxy
+    x_center = int((x1 + x2) / 2)
+    y_center = int((y1 + y2) / 2)
+
+    roi = image[y1:y2, x1:x2]
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    gray = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(gray, 50, 150)
+
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return x_center, y_center, None, annotated
+
+    cnt = max(contours, key=cv2.contourArea)
+    vx, vy, x0, y0 = cv2.fitLine(cnt, cv2.DIST_L2, 0, 0.01, 0.01)
+    vx, vy, x0, y0 = [v.item() for v in [vx, vy, x0, y0]]  # ensure scalar values
+
+    angle_deg = float(np.degrees(np.arctan2(vy, vx)))
+
+    # Draw direction line
+    length = 100
+    x1_line = int(x0 - length * vx)
+    y1_line = int(y0 - length * vy)
+    x2_line = int(x0 + length * vx)
+    y2_line = int(y0 + length * vy)
+    cv2.line(annotated, (x1 + x1_line, y1 + y1_line), (x1 + x2_line, y1 + y2_line), (0, 0, 255), 2)
+    cv2.circle(annotated, (x_center, y_center), 6, (255, 0, 0), -1)
+    cv2.putText(annotated, f"{angle_deg:.1f}°", (x_center + 10, y_center),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+
+    return x_center, y_center, angle_deg, annotated
+
+
+# main loop
+last_frame = None
+corner_found = False
 try:
-    client.connect()
-    print("✅ Connected to OPC UA Server")
-
-    # Use correct NodeId with |var|
-    x_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.Xhoek")
-    y_node = client.get_node("ns=4;s=|var|CODESYS Control Win V3 x64.Application.PLC_PRG.Yhoek")
-    print("Current values:")
-    print(f"Xhoek: {x_node.get_value()}")
-    print(f"Yhoek: {y_node.get_value()}")
     while True:
+        # Always get camera feed
         frames = pipe.wait_for_frames()
         color_frame = frames.get_color_frame()
         if not color_frame:
             continue
         color_image = np.asanyarray(color_frame.get_data())
 
-        # run the model and get the first element ([0])
-        results = model(color_image, imgsz=INFER_IMG_SIZE, device=device, half=use_half)[0]
+        check_value = check_node.get_value()
+        #Only check for corners when the plc gives the signal(if check_value is true)
+        if check_value and not corner_found:
+            print("Plc gave the signals, checking corners now:")
 
-        # annotated(boxes) image will be plotted/shown
-        annotated = results.plot() if results is not None else color_image.copy()
+            if last_frame is not None:
+                diff = cv2.absdiff(color_image, last_frame)
+                diff_mean = np.mean(diff)
+                if diff_mean < 5:
+                    print("No significant pixel change detected ")
+                    continue
+            #get the coords and angle from the image
+            x_corner, y_corner, angle, annotated = detect_corner_and_angle(color_image)
+            # If a corner is detected send the coords to plc and save the image
+            if x_corner is not None and y_corner is not None and angle is not None:
+                print(f"Corner detected: X={x_corner}, Y={y_corner}, Angle={angle:.2f}°")
+                #set the values of the on the plc. float because its lreal variables
+                x_node.set_value(ua.Variant(float(x_corner), ua.VariantType.Double))
+                y_node.set_value(ua.Variant(float(y_corner), ua.VariantType.Double))
+                angle_node.set_value(ua.Variant(float(angle), ua.VariantType.Double))
+                cornerFound_node.set_value(ua.Variant(True), ua.VariantType.Boolean)
+                corner_found = True
+                # Image saving, nothing added to the working of the program but for review afterwards
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                save_path = os.path.join(saveFolder, f"corner_{timestamp}.jpg")
+                cv2.imwrite(save_path, annotated)
+                print(f"Saved reviewd image to: {save_path}")
 
-        # Bbox- en klasse-extractie (print naar console)
-        boxes = getattr(results, "boxes", None)  # none if there are no detection
-        xpoint = None
-        ypoint = None
-        if boxes is not None and len(boxes) > 0:
-            counter = 0
-            # For loop prints the coords from highest confidence to lowest
-            for i in range(len(boxes.xyxy)):
-                # xyxy numpy ints: [x1, y1, x2, y2]
-                xyxy = boxes.xyxy[i].cpu().numpy().astype(int)
-                x1, y1, x2, y2 = int(xyxy[0]), int(xyxy[1]), int(xyxy[2]), int(xyxy[3])
-                conf = float(boxes.conf[i])
-                cls_id = int(boxes.cls[i])
-                cls_name = model.names.get(cls_id, str(cls_id))
-                if counter == 0:
-                    xpoint = int((xyxy[0] + xyxy[2])/2)
-                    ypoint = int((xyxy[1] + xyxy[3])/2)
-                # Print the confidence and coordinates
-                print(f"[{datetime.now().strftime('%H:%M:%S.%f')[:-3]}] {cls_name} conf={conf:.2f} bbox=(x1={x1}, y1={y1}, x2={x2}, y2={y2})")
+                display_image = annotated
+            else:
+                #if no corner detected send false to plc
+                display_image = color_image.copy()
+                cornerFound_node.set_value(ua.Variant(False), ua.VariantType.Boolean)
 
-        # Schaal alleen voor display
-        disp = annotated.copy()
-    
-        if xpoint is not None and ypoint is not None:
-            disp = cv2.circle(disp, center=(xpoint, ypoint), radius=2   , color=(0, 0, 255), thickness=1)
-            print(f"Pickup point: x1={xpoint}, y1={ypoint}")
-            x_node.set_value(xpoint, ua.VariantType.Int16)
-            y_node.set_value(ypoint, ua.VariantType.Int16)
-            print(f"Sent to PLC -> X: {x_node.get_value()}, Y: {y_node.get_value()}")
+            last_frame = color_image.copy()
 
+        elif not check_value:
+            corner_found = False
+            display_image = color_image.copy()
+        else:
+            display_image = color_image.copy()
 
-        cv2.imshow("YOLO RealSense", disp)
+        # Show bounding boxes & live feed
+        cv2.imshow("RealSense Camera", display_image)
 
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('q'):
+        # Exit
+        if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-        if key == ord('s'):
-            ts = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
-            save_path = os.path.join(SAVE_DIR, f"unannotated_{ts}.jpg")
-            if cv2.imwrite(save_path, color_image):
-                print("✅ Saved unannotated image:", save_path)
-            else:
-                print("❌ Failed to save image:", save_path)
-
 finally:
+    print("stopping camera, disconnecting from server")
     pipe.stop()
-    cv2.destroyAllWindows()
-
     client.disconnect()
-    print("🔌 Disconnected from OPC UA Server")
+    cv2.destroyAllWindows()
