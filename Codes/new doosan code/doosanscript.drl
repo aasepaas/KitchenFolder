@@ -1,0 +1,188 @@
+#test = posx([745,42,-6.6,31,176,0])
+#movejx(test,vel=25,acc=200,sol=2)
+#
+#while True:
+    #move_home()
+    #test = posx([700,0,0,0,180,0])
+    #movejx(test,vel=25,acc=200,sol=2)
+    #test = posx([700,0,0,0,180,180])
+    #movejx(test,vel=25,acc=200,sol=2)
+    #move_home()
+    #test1, status = ikin(test, 2 , DR_BASE, ref_pos_opt = 0)
+    #movej(test1,vel=25,acc=200)
+    #test = posx([500,0,0,0,180,0])
+    #movel(test,vel=50,acc=200)
+    #test = posj([-11,67, 64, -13,50,-3])
+    #movej(test,vel=50,acc=200)
+    #move_home()
+#
+#
+
+
+from DRCF import *
+# --- Variabelen ---
+Steps = 0
+#pneumatic cilinder list
+#set_digital_output(1, ON) #Second arm cilinder
+#set_digital_output(2, OFF) #Second arm gripper
+#set_digital_output(2, OFF) 3 robot arm gripper sucker
+#set_digital_output(2, OFF) 4 robot arm gripper 
+#set_digital_output(2, OFF) 5 possible robot arm gripper blowerá
+
+#global variables
+TowelVisible = False
+FirstCornerVisible = False
+GrabbedFirstCorner = False
+GrabbedSecondCorner = False
+CheckForCorner = False
+
+XfirstCorner = 0.0
+YfirstCorner = 0.0
+AngleFirstCorner = 0.0
+XtableCorner = 0.0
+YtableCorner = 0.0
+XcoordsArmLinearAxis = 0.0
+YcoordsArmLinearAxis = 0.0
+XcoordsEndOfTable = 0.0
+YcoordsEndOfTable = 0.0
+XmovementThroughGripper = 0.0
+YmovementThroughGripper = 0.0
+
+sock = None
+
+# --- Socket Setup ---
+
+def ReadSocketData(msg):
+    global TowelVisible, FirstCornerVisible, SecondCornerVisible
+    global XfirstCorner, YfirstCorner, XsecondCorner, YsecondCorner
+    global XtableCorner, YtableCorner, XcoordsArmLinearAxis, YcoordsArmLinearAxis
+    global XcoordsEndOfTable, YcoordsEndOfTable
+
+   
+    if msg != None and msg != "":
+        parts = msg.split(";")
+        for pair in parts:
+            if pair != "":
+                kv = pair.split("=")
+                if len(kv) == 2:
+                    key = kv[0]
+                    value = kv[1]
+                    if key == "TowelVisible":
+                        TowelVisible = (value == "1")
+                    elif key == "FirstCornerVisible":
+                        FirstCornerVisible = (value == "1")
+                    elif key == "XfirstCorner":
+                        XfirstCorner = float(value)
+                    elif key == "YfirstCorner":
+                        YfirstCorner = float(value)
+                    elif key == "AngleFirstCorner":
+                        AngleFirstCorner = float(value)
+   # client_socket_close(sock)
+
+def WriteSocketData(msg):
+    
+    client_socket_write(sock,  msg.encode())
+
+def MoveL_DRL(x, y, z, vel=200, acc=500):
+    pos = [x, y, z, 0, 0, 0]
+
+    movel(pos, vel, acc, 0, 0, 0)
+
+def Main():
+    global Steps, ConveyorBelt, TowelVisible, FirstCornerVisible, SecondCornerVisible
+    global GrabbedFirstCorner, GrabbedSecondCorner, TakeLatestPicture, CheckForCorner
+    global XfirstCorner, YfirstCorner, XsecondCorner, YsecondCorner
+    global XtableCorner, YtableCorner, XcoordsArmLinearAxis, YcoordsArmLinearAxis
+    global XcoordsEndOfTable, YcoordsEndOfTable
+    global T1_start, T1_running, T2_start, T2_running
+   # client_socket_close(sock)
+    while True:
+
+
+        # State machine
+        if Steps == 0:
+            TowelVisible = False
+            FirstCornerVisible = False
+            GrabbedFirstCorner = False
+            GrabbedSecondCorner = False
+            TakeLatestPicture = False
+            CheckForCorner = False
+
+            XfirstCorner = 0.0; YfirstCorner = 0.0
+            AngleFirstCorner = 0.0
+
+            Steps = 1
+
+        elif Steps == 1: #Give signal to laptop/camera to search for towel 
+            CheckForCorner = True
+            sock = client_socket_open('192.168.137.10', 5000)
+            msgToLaptop = "CheckForCorner=1"
+            #WriteSocketData(msgToLaptop) # send to laptop the green flag to open camera and search
+            client_socket_write(sock,  msgToLaptop.encode())
+            resp, recv = client_socket_read(sock)
+            client_socket_close(sock)
+            msg = recv.decode()
+            ReadSocketData(msg) #read the respons from the laptop 
+            wait(1)
+            if TowelVisible:
+                Steps = 2
+
+        elif Steps == 2: # If corner is found go to pickup step else go to blow towel away step
+            if FirstCornerVisible:
+                Steps = 3
+            else: 
+                Steps = 103
+
+        elif Steps == 3: # Move to the corner coordinates
+        #Change the Y coordinate to the actual y coordinate when using code!!!!!!!!!!!!!!!!!!!!!!!!
+            MoveL_DRL(XfirstCorner, YfirstCorner, 0.0)
+            Steps = 4
+      
+        elif Steps == 4: #pickup corner
+            wait(1)
+            Steps = 5
+
+        elif Steps == 5: #Move to edge of table
+            #Change the Y coordinate to the actual y coordinate when using code!!!!!!!!!!!!!!!!!!!!!!!!
+            MoveL_DRL(XtableCorner, YtableCorner, 0.0)
+           
+            Steps = 6
+
+        elif Steps == 6:#Move to second arm/gripper and grab it
+            MoveL_DRL(XcoordsArmLinearAxis, YcoordsArmLinearAxis, 0.0)
+            GrabbedSecondCorner = True
+            if GrabbedSecondCorner:
+                Steps = 7
+
+        elif Steps == 7:#Move through the second gripper to get the towel folded out
+            MoveL_DRL(XmovementThroughGripper, YmovementThroughGripper, 0.0)
+            Steps = 8
+
+        elif Steps == 8:#Move arm in sync with the linear axis
+            MoveL_DRL(XcoordsArmLinearAxis, YcoordsArmLinearAxis, 0.0)
+            Steps = 9
+
+        elif Steps == 9: #move robot and linear axis to the other side of the table
+            if SecondCornerVisible:
+                Steps = 10
+
+        elif Steps == 10: #let go of the both corners
+            if GrabbedFirstCorner:
+                Steps = 0
+
+        elif Steps == 103: #Turn on blow towel away 
+            wait(10)
+            if not TowelVisible:
+                Steps = 104
+
+        elif Steps == 104: #Back to start
+            wait(10)
+            Steps = 0
+
+        else:
+            Steps = 0
+
+        wait(0.01) # 10 ms wachten
+        
+        
+Main()
