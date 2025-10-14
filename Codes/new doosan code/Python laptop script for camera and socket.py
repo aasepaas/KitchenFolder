@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from ultralytics import YOLO
 from extrafuntions import camera_to_robot
+from functieAngleVerandering import get_abc_poly
 from datetime import datetime
 from pathlib import Path
 import os
@@ -24,7 +25,7 @@ TARGET_CLASSES = ["towel", "corner"]
 # ---------------------------
 # Socket instellingen
 # ---------------------------
-HOST_IP = "192.168.10.167"  # laptop
+HOST_IP = "192.168.137.10"  # laptop
 PORT = 5000
 
 # ---------------------------
@@ -214,6 +215,7 @@ try:
                     if towel_found and corner_boxes and not corner_found:
                         best_corner = corner_boxes[0][2]
                         angle = detect_corner_angle(color_image, best_corner, annotated)
+                        print(f"Angle: {angle}")
                         if angle is not None:
                             x1, y1, x2, y2 = best_corner
                             x_center = int((x1 + x2) / 2)
@@ -251,10 +253,13 @@ try:
             if corner_found and corner_data:
                 x, y, angle = corner_data
                 xVerwerkt, yverwerkt = camera_to_robot(x, y)
+                Cverwerkt = 0.631 * angle - 86.7
+                print(f"Angle: {angle}, verwerkt: {Cverwerkt}")
                 msg = (
                     f"TowelVisible=1;FirstCornerVisible=1;"
-                    f"XfirstCorner={xVerwerkt:.3f};YfirstCorner={yverwerkt:.3f};AngleFirstCorner={angle:.3f};"
+                    f"XfirstCorner={xVerwerkt:.3f};YfirstCorner={yverwerkt:.3f};C={Cverwerkt:.3f};"
                 )
+
             else:
                 msg = "TowelVisible=1;FirstCornerVisible=0;"
         else:
