@@ -14,7 +14,7 @@ import socket
 
 
 # Config AI model
-MODEL_PATH = r"C:\Users\aashi\PycharmProjects\PythonProject\runs\detect\train16\weights\best.pt"
+MODEL_PATH = r"C:\Users\aashi\PycharmProjects\PythonProject\runs\detect\train18\weights\best.pt"
 model = YOLO(MODEL_PATH)
 SAVE_DIR = r"C:\AI-Hoeken_towels\review"  # only for saving photos to look at it for review, nothing added to the general code
 IMG_SIZE = (1280, 736)
@@ -74,7 +74,6 @@ def detect_objects(image):
     return detections, annotated
 
 
-# Corner angle detectie met WHITE MASK CHECK + visuele lijnen + retry logica
 def detect_corner_angle(image, box, annotated):
     x1, y1, x2, y2 = box
     roi = image[y1:y2, x1:x2].copy()
@@ -106,99 +105,113 @@ def detect_corner_angle(image, box, annotated):
 
     angle_deg = None
     if len(lines) == 2:
-        def line_intersection(p1, p2):
-            x1, y1, x2, y2 = p1
-            x3, y3, x4, y4 = p2
-            denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-            if denom == 0:
-                return int((x1 + x2 + x3 + x4) / 4), int((y1 + y2 + y3 + y4) / 4)
-            px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / denom
-            py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / denom
-            return int(px), int(py)
-
-        pts = []
-        for (vx, vy, x0, y0) in lines:
-            x1l, y1l = int(x0 - vx), int(y0 - vy)
-            x2l, y2l = int(x0 + vx), int(y0 + vy)
-            pts.append((x1l, y1l, x2l, y2l))
-
-        ix, iy = line_intersection(pts[0], pts[1])
+        # Gebruik PCA lijnen als richting — bepaal hun gemiddelde hoek
         angle1 = np.arctan2(lines[0][1], lines[0][0])
         angle2 = np.arctan2(lines[1][1], lines[1][0])
-        avg_angle = (angle1 + angle2) / 2
-        angle_deg = float(np.degrees(avg_angle))
+        avg_angle = (angle1 + angle2) / 2  # gemiddelde richting in radialen
 
-        if angle_deg < -45 or angle_deg > 45:
-            return None
+        # ===== BELANGRIJK: angle berekenen t.o.v. X-as =====
+        angle_deg = np.degrees(avg_angle)
+        angle_deg = (angle_deg + 360) % 360  # [0,360)
+        if angle_deg > 180:
+            angle_deg -= 180
+        if angle_deg > 90:
+            angle_deg = 180 - angle_deg  # ✅ beperking tot max 90°
 
-        # ===== NIEUWE WHITE MASK CHECK =====
+
+        if angle_deg > 180:
+            angle_deg -= 180
+
+        # Middelpunt ROI
+        cx = (x2 - x1) // 2
+        cy = (y2 - y1) // 2
+        L = 150  # lengte referentielijn
+
+        # ===== WHITE MASK CHECK =====
         hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-
-        # Strategie 1: HSV white mask (relaxed)
         lower_white_hsv = np.array([0, 0, 120])
         upper_white_hsv = np.array([180, 100, 255])
         white_mask_hsv = cv2.inRange(hsv, lower_white_hsv, upper_white_hsv)
 
-        # Strategie 2: Grayscale brightness mask
         gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
         _, white_mask_gray = cv2.threshold(gray_roi, 100, 255, cv2.THRESH_BINARY)
 
-        # Combineer beide masks
         white_mask = cv2.bitwise_or(white_mask_hsv, white_mask_gray)
-
-        # Morfologische operaties
         kernel = np.ones((3, 3), np.uint8)
         white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, kernel)
 
-        # Sample punten langs de groene lijn
-        L = 150
         samples = 40
         white_count = 0
         total_valid_samples = 0
 
+        dx = int(L * np.cos(np.radians(angle_deg)))
+        dy = int(L * np.sin(np.radians(angle_deg)))
+
         for i in range(-samples // 2, samples // 2):
             t = (i / samples) * L
-            x = int(ix + t * np.cos(avg_angle))
-            y = int(iy + t * np.sin(avg_angle))
-
+            x = int(cx + t * np.cos(np.radians(angle_deg)))
+            y = int(cy + t * np.sin(np.radians(angle_deg)))
             if 0 <= x < roi.shape[1] and 0 <= y < roi.shape[0]:
                 total_valid_samples += 1
                 if white_mask[y, x] > 0:
                     white_count += 1
 
         if total_valid_samples == 0:
-            print(f" iGeen valide samples binnen ROI")
+            print("⚠️ Geen valide samplepunten binnen ROI")
             return None
 
         white_ratio = white_count / total_valid_samples
-        print(f"    White coverage: {white_ratio:.1%} ({white_count}/{total_valid_samples})")
+        print(f"White coverage: {white_ratio:.1%} ({white_count}/{total_valid_samples})")
 
-        # Threshold check
         MIN_WHITE_RATIO = 0.10
         if white_ratio < MIN_WHITE_RATIO:
-            print(f" Raaklijn gedetecteerd (slechts {white_ratio:.1%} op wit), verwerpen")
+            print(f"Te weinig wit ({white_ratio:.1%}) — hoek ongeldig")
             return None
 
-        print(f"Check geslaagd: {white_ratio:.1%} op wit")
-        # ===================================
+        # ===== VISUALISATIE (korte blauwe lijnen bij de hoek zelf) =====
+        # Bereken hoekpunt als snijpunt van de twee PCA-lijnen
+        def line_to_params(vx, vy, x0, y0):
+            a = vy
+            b = -vx
+            c = vx * y0 - vy * x0
+            return a, b, c
 
-        # Teken lijnen op ROI
-        dx = int(L * np.cos(avg_angle))
-        dy = int(L * np.sin(avg_angle))
+        (a1, b1, c1) = line_to_params(*lines[0])
+        (a2, b2, c2) = line_to_params(*lines[1])
+        det = a1 * b2 - a2 * b1
+        if abs(det) < 1e-6:
+            corner_point = (cx, cy)
+        else:
+            x_int = (b1 * c2 - b2 * c1) / det
+            y_int = (c1 * a2 - c2 * a1) / det
+            corner_point = (int(x_int), int(y_int))
 
-        # Teken blauwe edge lijnen
+        corner_x, corner_y = corner_point
+
+        # Korte blauwe lijnen rond de hoek
+        short_len = 40
         for (vx, vy, x0, y0) in lines:
-            x1l, y1l = int(x0 - vx), int(y0 - vy)
-            x2l, y2l = int(x0 + vx), int(y0 + vy)
-            cv2.line(roi, (x1l, y1l), (x2l, y2l), (255, 0, 0), 2)
+            dx = int(short_len * vx)
+            dy = int(short_len * vy)
+            p1 = (int(corner_x - dx), int(corner_y - dy))
+            p2 = (int(corner_x + dx), int(corner_y + dy))
+            cv2.line(roi, p1, p2, (255, 0, 0), 2)
 
-        # Teken groene hoeklijn
-        cv2.line(roi, (ix - dx, iy - dy), (ix + dx, iy + dy), (0, 255, 0), 3)
-        cv2.circle(roi, (ix, iy), 5, (0, 255, 0), -1)
+        # Rode horizontale referentielijn
+        cv2.line(roi, (cx - L, cy), (cx + L, cy), (0, 0, 255), 2)
+
+        # Groene hoeklijn van hoekpunt naar midden
+        cv2.line(roi, corner_point, (cx, cy), (0, 255, 0), 2)
+        cv2.circle(roi, corner_point, 6, (0, 255, 0), -1)
+
+        # Toon hoekwaarde
+        cv2.putText(roi, f"{angle_deg:.1f} deg", (corner_x + 10, corner_y - 10),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
         annotated[y1:y2, x1:x2] = roi
 
     return angle_deg
+
 
 
 # start Socket server
@@ -364,12 +377,14 @@ try:
         if towel_found:
             if corner_found and corner_data:
                 x, y, angle = corner_data
-                xVerwerkt, yverwerkt = camera_to_robot(x, y)
-                Cverwerkt = 0.958 * angle - 83.68
+                xVerwerkt, yverwerkt, zVerwerkt = camera_to_robot(x, y)
+                zVerwerkt2 = zVerwerkt + 1
+                Cverwerkt = 0.83 * angle - 192.8
                 print(f"Angle: {angle}, verwerkt: {Cverwerkt}")
+                print(f"X en Y : {x}  {y}")
                 msg = (
                     f"TowelVisible=1;FirstCornerVisible=1;"
-                    f"XfirstCorner={xVerwerkt:.3f};YfirstCorner={yverwerkt:.3f};C={Cverwerkt:.3f};"
+                    f"XfirstCorner={xVerwerkt:.3f};YfirstCorner={yverwerkt:.3f};Z={zVerwerkt2:.3f};C={Cverwerkt:.3f};"
                 )
             else:
                 msg = "TowelVisible=1;FirstCornerVisible=0;"
