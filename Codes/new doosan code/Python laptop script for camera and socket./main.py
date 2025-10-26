@@ -1,11 +1,9 @@
-
-
-
 import pyrealsense2 as rs
 import numpy as np
 import cv2
 from ultralytics import YOLO
 from extrafuntions import camera_to_robot
+from functieAngleVerandering import cameraAngle_to_doosan
 from datetime import datetime
 from pathlib import Path
 import os
@@ -378,8 +376,8 @@ try:
             if corner_found and corner_data:
                 x, y, angle = corner_data
                 xVerwerkt, yverwerkt, zVerwerkt = camera_to_robot(x, y)
-                zVerwerkt2 = zVerwerkt + 1
-                Cverwerkt = 0.83 * angle - 192.8
+                zVerwerkt2 = zVerwerkt
+                Cverwerkt = cameraAngle_to_doosan(angle)
                 print(f"Angle: {angle}, verwerkt: {Cverwerkt}")
                 print(f"X en Y : {x}  {y}")
                 msg = (
