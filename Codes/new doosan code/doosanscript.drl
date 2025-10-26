@@ -82,85 +82,120 @@
 ##movejx(EndCoords,vel=25,acc=200,sol=2)
 ##wait(10)
 
-
-set_digital_output(1, OFF) #Second arm cilinder  #off extended
-set_digital_output(2, ON) #robot arm gripper #ON is open to suck 
-set_digital_output(3, OFF) #Towel blower off towel #off is off
-set_digital_output(4, ON) #Second arm gripper #off is closed
-set_digital_output(5, ON) #Venturi  #on is off
-
-
-endOTabelCoords = posx([1106.4,-63.7,372.60,171.9,-128.59, -164.42])
-endOTabelCoordsLowered = posx([1002.33, 48.67,49.31,2.26,174.24,42.87])
-LinearAxisCoords = posx([997.01,104.15,50.7,172.28,-170.45,-141.12])
-LinearAxisUp = posx([976.13,100.2,441.48,174.29,-161.52, -142.01])
-Straight2gripperhold = posx([1014.8,-270.17,52.88,102.45,-176.02, 157.11])
-#startpos = posx([572.52, -542.23, 219.95, AngleA, AngleB, 180])
-
-endOTabelCoordsLoweredTest1anglecilinderclosertotable = posx([940.77, 36.24,46.79,175.81,-157.52,-142.49])
-LinearAxisCoordsTest1 = posx([943.52,96.78,47.40, 0.71, 156.91, 39.72])
-
-endOTabelCoordsLoweredTest2anglecilinderfurthertotable = posx([1066.22, 7.77,55.41,168.70,162.28,-143.50])
-LinearAxisCoordsTest2 = posx([1067.51,89.25, 61.24, 169.81, 163.61, -146.54])
-LinearAxisUpTEST = posx([999.13,-34.79,450,38.47,167.50, 89.73])
-Straight2gripperholdTEST = posx([1052.83, -334.49, 56.66, 127.75, -170.23, 83.71])
-endpos = posx([564.97, -328.08, 49.12, 71.92, -176.12, 23.28])
-endpos = posx([524.97, -376.08, 45.12, 59.92, -171.12, 7.06])
-
-
-vel150 = 150
-acc400 = 400
-XfirstCorner = 503.22
-YfirstCorner = -738.16
-AngleA = 92.27
-AngleB = -176.14
-AngleC = -106.86
-ZfirstCorner = 22.94
-startpos = posx([572.52, -542.23, 219.95, AngleA, AngleB, 180])
-movejx(startpos,vel=150,acc=400,sol=2)
-
-
-
-testNiuewe = posx([XfirstCorner,YfirstCorner,70.2,AngleA,AngleB,AngleC])
-movejx(testNiuewe,vel150,acc400,sol=2)
-testNiuewe = posx([XfirstCorner,YfirstCorner,ZfirstCorner,AngleA,AngleB,AngleC])
-movejx(testNiuewe,vel=65,acc=200,sol=2)
-
-      
-set_digital_output(2, ON)
-set_digital_output(5, OFF) #Venturi
-wait(0.1)
-##test = posx([892.5,73.9,60.9,18.68,172.6,-77.1]) #sol=3 voor pickup?
-test = posx([XfirstCorner,YfirstCorner,42.2,AngleA,AngleB,AngleC])
-movejx(test,75,acc=300,sol=2) 
-set_digital_output(2, OFF) #robot arm gripper #ON is open to suck 
-set_digital_output(5, ON) #Venturi
-test = posx([XfirstCorner,YfirstCorner,100.2,AngleA,AngleB,AngleC])
-movejx(test,75,acc=300,sol=2) 
-
-movejx(endOTabelCoords,vel = 150,acc = 400,sol=2)
-movejx(endOTabelCoordsLoweredTest2anglecilinderfurthertotable,vel = 50,acc=200,sol=2)
-wait(0.1)
-
-movejx(LinearAxisCoordsTest2,vel=15,acc=75,sol=2)
-set_digital_output(4, OFF) ##Second arm gripper #ON is open
-wait(0.2)
+##########!!!!!!!!!!!!TEST CODE CORRECT################!!!!!!!!!!!!!!1
+#set_digital_output(1, OFF) #Second arm cilinder  #off extended
+#set_digital_output(2, ON) #robot arm gripper #ON is open to suck 
+#set_digital_output(3, OFF) #Towel blower off towel #off is off
+#set_digital_output(4, ON) #Second arm gripper #off is closed
+#set_digital_output(5, ON) #Venturi  #on is off
+#set_digital_output(6, ON) ##Second arm cilinder #NO
 #
-movejx(LinearAxisUpTEST,vel=50,acc=150,sol=2)
-movejx(Straight2gripperholdTEST,vel150,acc400,sol=2)##make it go beside it
-            
-
-set_digital_output(1, ON) ##Second arm cilinder #NO
-movejx(endpos,vel=150,acc=350, sol=2)
-
-set_digital_output(4, ON) ##Second arm cilinder #NO
-set_digital_output(2, OFF)  ##robot arm gripper #ON is open to suck 
-wait(0.1)
-set_digital_output(3, ON)
-wait(1.5)
-set_digital_output(3, OFF)
-
-
+#
+#
+#endOTabelCoordsLowered = posx([1002.33, 48.67,49.31,2.26,174.24,42.87])
+#LinearAxisCoords = posx([997.01,104.15,50.7,172.28,-170.45,-141.12])
+#LinearAxisUp = posx([976.13,100.2,441.48,174.29,-161.52, -142.01])
+#Straight2gripperhold = posx([1014.8,-270.17,52.88,102.45,-176.02, 157.11])
+##startpos = posx([572.52, -542.23, 219.95, AngleA, AngleB, 180])
+#
+#endOTabelCoordsLoweredTest1anglecilinderclosertotable = posx([940.77, 36.24,46.79,175.81,-157.52,-142.49])
+#LinearAxisCoordsTest1 = posx([943.52,96.78,47.40, 0.71, 156.91, 39.72])
+#
+#LinearAxisUpTEST = posx([999.13,-34.79,450,38.47,167.50, 89.73])
+#Straight2gripperholdTEST = posx([1052.83, -334.49, 56.66, 127.75, -170.23, 83.71])
+#endpos = posx([564.97, -328.08, 49.12, 71.92, -176.12, 23.28])
+#endpos = posx([524.97, -376.08, 45.12, 59.92, -171.12, 7.06])
+#
+#
+#vel150 = 150
+#acc400 = 400
+#XfirstCorner = 503.22
+#YfirstCorner = -738.16
+#AngleA = 92.27
+#AngleB = -176.14
+#AngleC = -106.86
+#ZfirstCorner = 22.94
+#startpos = posx([572.52, -542.23, 219.95, AngleA, AngleB, 180])
+#movejx(startpos,vel=150,acc=350,sol=2)
+#
+#
+#
+#testNiuewe = posx([XfirstCorner,YfirstCorner,70.2,AngleA,AngleB,AngleC])
+#movejx(testNiuewe,vel150,acc400,sol=2)
+#testNiuewe = posx([XfirstCorner,YfirstCorner,ZfirstCorner,AngleA,AngleB,AngleC])
+#movejx(testNiuewe,vel=65,acc=200,sol=2)
+#
+      #
+#set_digital_output(2, ON)
+#set_digital_output(5, OFF) #Venturi
+#wait(0.1)
+###test = posx([892.5,73.9,60.9,18.68,172.6,-77.1]) #sol=3 voor pickup?
+#test = posx([XfirstCorner,YfirstCorner,42.2,AngleA,AngleB,AngleC])
+#movejx(test,125,acc=300,sol=2) 
+#set_digital_output(2, OFF) #robot arm gripper #ON is open to suck 
+#set_digital_output(5, ON) #Venturi
+#test = posx([XfirstCorner,YfirstCorner,100.2,AngleA,AngleB,AngleC])
+#movejx(test,75,acc=300,sol=2) 
+#
+#endOTabelCoords = posx([1106.4,-63.7,372.60,173.83,-136.27, -41.38])
+#movejx(endOTabelCoords,vel = 100,acc = 250,sol=2, radius = 25)
+#
+##endOTabelCoords = posx([1106.4,-63.7,372.60,171.9,-128.59, -164.42])
+##movejx(endOTabelCoords,vel = 150,acc = 400,sol=2, radius = 25)
+#
+##endOTabelCoords2 = posx([1007.47, -49.13, 272.93, 129.39, -172.82, 154.29])
+##movejx(endOTabelCoords2,vel = 150,acc = 400,sol=2, radius = 5)
+#wait(0.1)
+##y = 91.41
+#yChangeable = 5
+#endOTabelCoordsLoweredTest2anglecilinderfurthertotable = posx([1078.44,yChangeable, 51.72, 5.32, -151.68, 44.76])
+#for x in range(17):
+    #yChangeable = yChangeable +5
+    #endOTabelCoordsLoweredTest2anglecilinderfurthertotable = [1066.22, yChangeable,55.41,168.70,162.28,-143.50]
+    #movejx(endOTabelCoordsLoweredTest2anglecilinderfurthertotable,vel=110,acc=300,sol=2, radius = 25)
+#
+##LinearAxisCoordsTest2 = posx([1067.51,89.25, 61.24, 169.81, 163.61, -146.54])
+##movejx(LinearAxisCoordsTest2,vel=15,acc=50,sol=2)
+#wait(0.2)
+#set_digital_output(4, OFF) ##Second arm gripper #ON is open
+#wait(0.1)
+##
+#movejx(LinearAxisUpTEST,vel=125,acc=275,sol=2, radius = 10)
+#
+#
+#yChangeable = -192
+#Straight2gripperholdTEST2 = posx(1041.54, yChangeable, 52.24, 84.44, -157.21, 26.94)
+#for x in range(17):
+    #yChangeable = yChangeable - 5
+    #Straight2gripperholdTEST2 = posx(1041.54, yChangeable, 52.24, 84.44, -157.21, 26.94)
+    #movejx(Straight2gripperholdTEST2,vel=110,acc=300,sol=2, radius = 25)
+#
+#wait(0.1)
+#set_digital_output(6, OFF) ##Second arm cilinder #NO
+#wait(0.1)
+#set_digital_output(2, ON)  ##robot arm gripper #ON is open to suck 
+#wait(0.1)
+#
+#
+#AfterThirdGripper = posx(1001.54, -167.64, 150.24, 165.44, -161.21, 124.94)
+#movejx(AfterThirdGripper,vel150,acc400,sol=2, radius = 10)##make it go beside it
+            #
+#set_digital_output(1, ON) ##Second arm cilinder #NO
+##movejx(endpos,vel=150,acc=350, sol=2)
+#movejx(startpos,vel=150,acc=400,sol=2, radius = 10)
+#
+#wait(0.1)
+#set_digital_output(4, ON) ##Second arm cilinder #NO
+#set_digital_output(6, ON) ##Second arm cilinder #NO
+#
+#wait(1.0)
+#set_digital_output(3, ON)
+#wait(1.5)
+#set_digital_output(3, OFF)
+#
+#
+#wait(10)
+#
             
 
 
@@ -170,11 +205,18 @@ from DRCF import *
 ## --- Variabelen ---
 Steps = 0
 ##pneumatic cilinder list
+#set_digital_output(1, OFF) #Second arm cilinder  #off extended
+#set_digital_output(2, ON) #robot arm gripper #ON is open to suck 
+#set_digital_output(3, OFF) #Towel blower off towel #off is off
+#set_digital_output(4, ON) #Second arm gripper #off is closed
+#set_digital_output(5, ON) #Venturi  #on is off
 set_digital_output(1, ON) #Second arm cilinder, on is ready to grip
 set_digital_output(2, ON) #robot arm gripper #ON is open to suck 
 set_digital_output(3, OFF) #Towel blower off towel 
 set_digital_output(4, OFF) #Second arm gripper #off ready to gri
 set_digital_output(5, ON) #Venturi 
+set_digital_output(6, ON) ##Second arm cilinder #NO
+
 
 global variables
 TowelVisible = False
@@ -218,6 +260,8 @@ set_digital_output(2, ON) #robot arm gripper #ON is open to suck
 set_digital_output(3, OFF) #Towel blower off towel #off is off
 set_digital_output(4, ON) #Second arm gripper #off is closed
 set_digital_output(5, ON) #Venturi  #on is off
+set_digital_output(6, ON) ##Second arm cilinder #NO
+
 #movejx(startpos,vel150,acc400,sol=2)
 
 
@@ -286,6 +330,7 @@ def Main():
             set_digital_output(3, OFF) #Towel blower off towel #off is off
             set_digital_output(4, ON) #Second arm gripper #off is closed
             set_digital_output(5, ON) #Venturi  #on is off
+            set_digital_output(6, ON) #Venturi  #on is off
             movejx(startpos,vel150,acc400,sol=2)
             Steps = 1
 
@@ -330,7 +375,7 @@ def Main():
             set_digital_output(5, ON) #Venturi
             test = posx([XfirstCorner,YfirstCorner,100.2,AngleA,AngleB,AngleC])
             movejx(test,75,acc=300,sol=2) 
-            
+            break
             
             Steps = 5
 
