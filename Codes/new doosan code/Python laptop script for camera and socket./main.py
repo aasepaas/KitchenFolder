@@ -39,7 +39,7 @@ pipe.start(cfg)
 time.sleep(1)
 
 #Max retries variables for angle calculations and corner check after towel is found
-maxAngleRetries = 10
+maxAngleRetries = 6
 
 # Functions
 # function to check all the objects in the image
@@ -378,6 +378,7 @@ try:
                 xVerwerkt, yverwerkt, zVerwerkt = camera_to_robot(x, y)
                 zVerwerkt2 = zVerwerkt
                 Cverwerkt = cameraAngle_to_doosan(angle)
+                Cverwerkt += 5
                 print(f"Angle: {angle}, verwerkt: {Cverwerkt}")
                 print(f"X en Y : {x}  {y}")
                 msg = (
