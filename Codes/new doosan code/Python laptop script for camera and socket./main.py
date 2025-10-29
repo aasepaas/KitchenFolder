@@ -114,7 +114,7 @@ def detect_corner_angle(image, box, annotated):
         if angle_deg > 180:
             angle_deg -= 180
         if angle_deg > 90:
-            angle_deg = 180 - angle_deg  # ✅ beperking tot max 90°
+            angle_deg = 180 - angle_deg  
 
 
         if angle_deg > 180:
@@ -155,7 +155,7 @@ def detect_corner_angle(image, box, annotated):
                     white_count += 1
 
         if total_valid_samples == 0:
-            print("⚠️ Geen valide samplepunten binnen ROI")
+            print("Geen valide samplepunten binnen ROI")
             return None
 
         white_ratio = white_count / total_valid_samples
@@ -407,9 +407,9 @@ try:
                 h = int(disp_to_save.shape[0] * DISPLAY_SCALE)
                 disp_to_save = cv2.resize(disp_to_save, (w, h))
             cv2.imwrite(save_path_annotated, disp_to_save)
-            print(f"🖼 Annotated image opgeslagen als: {save_path_annotated}")
+            print(f"Annotated image opgeslagen als: {save_path_annotated}")
         else:
-            print("⚠️ Geen annotated beeld om op te slaan (detectie niet uitgevoerd).")
+            print("Geen annotated beeld om op te slaan (detectie niet uitgevoerd).")
 
         # Probeer de laatste originele frame ook te bewaren
         try:
@@ -419,11 +419,11 @@ try:
             if color_frame:
                 raw_image = np.asanyarray(color_frame.get_data())
                 cv2.imwrite(save_path_raw, raw_image)
-                print(f"📸 Raw (onnannotated) image opgeslagen als: {save_path_raw}")
+                print(f"Raw (onnannotated) image opgeslagen als: {save_path_raw}")
             else:
-                print("⚠️ Geen raw frame beschikbaar om op te slaan.")
+                print("Geen raw frame beschikbaar om op te slaan.")
         except Exception as e:
-            print(f"⚠️ Kon raw afbeelding niet opslaan: {e}")
+            print(f"Kon raw afbeelding niet opslaan: {e}")
 
         conn.close()
         print("Connection closed\n")
