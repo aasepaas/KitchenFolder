@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from ultralytics import YOLO
 from extrafuntions import camera_to_robot
+from extraZ import camera_to_robotZCoords
 from functieAngleVerandering import cameraAngle_to_doosan
 from datetime import datetime
 from pathlib import Path
@@ -10,11 +11,10 @@ import os
 import time
 import socket
 
-
 # Config AI model
 MODEL_PATH = r"C:\Users\aashi\PycharmProjects\PythonProject\runs\detect\train18\weights\best.pt"
 model = YOLO(MODEL_PATH)
-SAVE_DIR = r"C:\AI-Hoeken_towels\review"  # only for saving photos to look at it for review, nothing added to the general code
+SAVE_DIR = r"C:\AI-Hoeken_towels\review"
 IMG_SIZE = (1280, 736)
 DISPLAY_SCALE = 0.7
 Path(SAVE_DIR).mkdir(parents=True, exist_ok=True)
@@ -22,9 +22,8 @@ Path(SAVE_DIR).mkdir(parents=True, exist_ok=True)
 TARGET_CLASSES = ["towel", "corner"]
 
 # Socket variables
-HOST_IP = "192.168.137.10"  # laptop
+HOST_IP = "192.168.137.10"
 PORT = 5000
-
 
 # Device setup
 device = "cpu"
@@ -38,11 +37,42 @@ cfg.enable_stream(rs.stream.color, 1920, 1080, rs.format.bgr8, 15)
 pipe.start(cfg)
 time.sleep(1)
 
-#Max retries variables for angle calculations and corner check after towel is found
+# Max retries variables for angle calculations and corner check after towel is found
 maxAngleRetries = 6
 
-# Functions
-# function to check all the objects in the image
+# ===== USER SET ROI (x1, y1, x2, y2) in ORIGINAL IMAGE COORDINATES =====
+# Stel hier je ROI in (pixelwaarden voor full-res frame)
+ROI_COORDS = (521, 850, 1662, 60)
+# =====================================================================
+
+def normalize_roi(coords, img_shape):
+    """Zorg dat coords in vorm (x1,y1,x2,y2) zijn, x1<x2, y1<y2 en binnen beeldgrootte."""
+    h, w = img_shape[:2]
+    x1, y1, x2, y2 = map(int, coords)
+    # swap indien nodig
+    if x1 > x2:
+        x1, x2 = x2, x1
+    if y1 > y2:
+        y1, y2 = y2, y1
+    # clip binnen beeld
+    x1 = max(0, min(x1, w - 1))
+    x2 = max(0, min(x2, w - 1))
+    y1 = max(0, min(y1, h - 1))
+    y2 = max(0, min(y2, h - 1))
+    return x1, y1, x2, y2
+
+def apply_roi_mask(image, roi):
+    """Zet alles buiten roi op zwart (roi = (x1,y1,x2,y2)). Teken ook groene rand."""
+    x1, y1, x2, y2 = roi
+    h, w = image.shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    if x2 > x1 and y2 > y1:
+        mask[y1:y2, x1:x2] = 255
+    masked = cv2.bitwise_and(image, image, mask=mask)
+    cv2.rectangle(masked, (x1, y1), (x2, y2), (0, 255, 0), 2)
+    return masked
+
+# Functions (ongeveer ongewijzigd)
 def detect_objects(image):
     results = model(image, imgsz=IMG_SIZE, device=device, half=use_half, stream=False)
     if not results or len(results) == 0:
@@ -72,143 +102,148 @@ def detect_objects(image):
     return detections, annotated
 
 
-def detect_corner_angle(image, box, annotated):
-    x1, y1, x2, y2 = box
-    roi = image[y1:y2, x1:x2].copy()
+
+
+
+
+def detect_corner_angle(roi_image, box=None, annotated=None, visualize=True):
+    # Zorg dat we roi hebben als crop
+    if box is not None and roi_image is not None and annotated is not None:
+        x1, y1, x2, y2 = box
+        roi = roi_image[y1:y2, x1:x2].copy()
+    else:
+        roi = roi_image.copy()
+
     if roi.size == 0:
         return None
 
+    h, w = roi.shape[:2]
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     gray = cv2.GaussianBlur(gray, (5, 5), 0)
     edges = cv2.Canny(gray, 50, 150)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
+        # teken edges en return
+        if visualize:
+            cv2.putText(roi, "No contours", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+            if annotated is not None and box is not None:
+                annotated[y1:y2, x1:x2] = roi
         return None
 
+    # grootste contour
     cnt = max(contours, key=cv2.contourArea)
-    data = cnt.reshape(-1, 2).astype(np.float32)
-    mean, eigenvectors = cv2.PCACompute(data, mean=np.array([]))
-    projections = (data - mean) @ eigenvectors[0]
+
+    # teken contour op roi voor visualisatie
+    if visualize:
+        cv2.drawContours(roi, [cnt], -1, (0, 255, 255), 2)
+
+    pts = cnt.reshape(-1, 2).astype(np.float32)
+    if pts.shape[0] < 2:
+        return None
+
+    # PCA-split in twee clusters
+    try:
+        mean, eigenvectors = cv2.PCACompute(pts, mean=np.array([]))
+    except Exception:
+        return None
+    projections = (pts - mean) @ eigenvectors[0]
     median_val = np.median(projections)
-    cluster1 = data[projections < median_val]
-    cluster2 = data[projections >= median_val]
+    cl1 = pts[projections < median_val]
+    cl2 = pts[projections >= median_val]
 
     lines = []
-    for cluster in [cluster1, cluster2]:
-        if len(cluster) < 2:
+    for cl in (cl1, cl2):
+        if len(cl) < 2:
             continue
-        vx, vy, x0, y0 = cv2.fitLine(cluster, cv2.DIST_L2, 0, 0.01, 0.01)
-        vx, vy, x0, y0 = float(vx[0]), float(vy[0]), float(x0[0]), float(y0[0])
+        vx, vy, x0, y0 = cv2.fitLine(cl, cv2.DIST_L2, 0, 0.01, 0.01)
+        vx, vy = float(vx[0]), float(vy[0])
+        x0, y0 = float(x0[0]), float(y0[0])
         lines.append((vx, vy, x0, y0))
 
-    angle_deg = None
-    if len(lines) == 2:
-        # Gebruik PCA lijnen als richting — bepaal hun gemiddelde hoek
-        angle1 = np.arctan2(lines[0][1], lines[0][0])
-        angle2 = np.arctan2(lines[1][1], lines[1][0])
-        avg_angle = (angle1 + angle2) / 2  # gemiddelde richting in radialen
+    if len(lines) < 2:
+        return None
 
-        # ===== BELANGRIJK: angle berekenen t.o.v. X-as =====
-        angle_deg = np.degrees(avg_angle)
-        angle_deg = (angle_deg + 360) % 360  # [0,360)
-        if angle_deg > 180:
-            angle_deg -= 180
-        if angle_deg > 90:
-            angle_deg = 180 - angle_deg  
+    # gemiddelde richting van de twee lijnen
+    ang1 = np.arctan2(lines[0][1], lines[0][0])
+    ang2 = np.arctan2(lines[1][1], lines[1][0])
+    sx = np.cos(ang1) + np.cos(ang2)
+    sy = np.sin(ang1) + np.sin(ang2)
+    if abs(sx) < 1e-9 and abs(sy) < 1e-9:
+        avg_ang = (ang1 + ang2) / 2.0
+    else:
+        avg_ang = np.arctan2(sy, sx)
 
+    raw_deg = np.degrees(avg_ang)
+    # normaliseer naar [-90,90]
+    if raw_deg > 90:
+        raw_deg -= 180
+    elif raw_deg <= -90:
+        raw_deg += 180
+    angle_deg = raw_deg
 
-        if angle_deg > 180:
-            angle_deg -= 180
+    # bereken snijpunt van lijnen als hoekpunt
+    def line_to_params(vx, vy, x0, y0):
+        a = vy
+        b = -vx
+        c = vx * y0 - vy * x0
+        return a, b, c
 
-        # Middelpunt ROI
-        cx = (x2 - x1) // 2
-        cy = (y2 - y1) // 2
-        L = 150  # lengte referentielijn
+    a1, b1, c1 = line_to_params(*lines[0])
+    a2, b2, c2 = line_to_params(*lines[1])
+    det = a1 * b2 - a2 * b1
+    cx, cy = w // 2, h // 2
+    if abs(det) < 1e-6:
+        corner_x, corner_y = cx, cy
+    else:
+        xi = (b1 * c2 - b2 * c1) / det
+        yi = (c1 * a2 - c2 * a1) / det
+        corner_x, corner_y = int(round(xi)), int(round(yi))
 
-        # ===== WHITE MASK CHECK =====
-        hsv = cv2.cvtColor(roi, cv2.COLOR_BGR2HSV)
-        lower_white_hsv = np.array([0, 0, 120])
-        upper_white_hsv = np.array([180, 100, 255])
-        white_mask_hsv = cv2.inRange(hsv, lower_white_hsv, upper_white_hsv)
+    # accepteer alleen wanneer corner in rechterhelft ligt
+    mid_x = w // 2
+    if corner_x < mid_x:
+        if visualize:
+            cv2.putText(roi, "Corner LEFT - ignored", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
+            # teken referentielijnen ook zodat je kunt zien waarom afgekeurd
+            cv2.line(roi, (mid_x, 0), (mid_x, h), (0,0,0), 2)  # zwarte verticale
+            cv2.line(roi, (0, cy), (w, cy), (0,0,255), 2)     # rode horizontale
+            if annotated is not None and box is not None:
+                annotated[y1:y2, x1:x2] = roi
+        return None
 
-        gray_roi = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        _, white_mask_gray = cv2.threshold(gray_roi, 100, 255, cv2.THRESH_BINARY)
-
-        white_mask = cv2.bitwise_or(white_mask_hsv, white_mask_gray)
-        kernel = np.ones((3, 3), np.uint8)
-        white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, kernel)
-
-        samples = 40
-        white_count = 0
-        total_valid_samples = 0
-
-        dx = int(L * np.cos(np.radians(angle_deg)))
-        dy = int(L * np.sin(np.radians(angle_deg)))
-
-        for i in range(-samples // 2, samples // 2):
-            t = (i / samples) * L
-            x = int(cx + t * np.cos(np.radians(angle_deg)))
-            y = int(cy + t * np.sin(np.radians(angle_deg)))
-            if 0 <= x < roi.shape[1] and 0 <= y < roi.shape[0]:
-                total_valid_samples += 1
-                if white_mask[y, x] > 0:
-                    white_count += 1
-
-        if total_valid_samples == 0:
-            print("Geen valide samplepunten binnen ROI")
-            return None
-
-        white_ratio = white_count / total_valid_samples
-        print(f"White coverage: {white_ratio:.1%} ({white_count}/{total_valid_samples})")
-
-        MIN_WHITE_RATIO = 0.10
-        if white_ratio < MIN_WHITE_RATIO:
-            print(f"Te weinig wit ({white_ratio:.1%}) — hoek ongeldig")
-            return None
-
-        # ===== VISUALISATIE (korte blauwe lijnen bij de hoek zelf) =====
-        # Bereken hoekpunt als snijpunt van de twee PCA-lijnen
-        def line_to_params(vx, vy, x0, y0):
-            a = vy
-            b = -vx
-            c = vx * y0 - vy * x0
-            return a, b, c
-
-        (a1, b1, c1) = line_to_params(*lines[0])
-        (a2, b2, c2) = line_to_params(*lines[1])
-        det = a1 * b2 - a2 * b1
-        if abs(det) < 1e-6:
-            corner_point = (cx, cy)
-        else:
-            x_int = (b1 * c2 - b2 * c1) / det
-            y_int = (c1 * a2 - c2 * a1) / det
-            corner_point = (int(x_int), int(y_int))
-
-        corner_x, corner_y = corner_point
-
-        # Korte blauwe lijnen rond de hoek
-        short_len = 40
+    # VISUALIZATIE: teken verticale referentie, horizontale middenlijn, center
+    if visualize:
+        # rode horizontale lijn (x-as)
+        cv2.line(roi, (0, cy), (w, cy), (0, 0, 255), 2)
+        # zwarte verticale referentie (midden)
+        cv2.line(roi, (mid_x, 0), (mid_x, h), (0, 0, 0), 2)
+        # teken beide fitted lijnen (lang)
+        long_len = max(w, h)
         for (vx, vy, x0, y0) in lines:
-            dx = int(short_len * vx)
-            dy = int(short_len * vy)
-            p1 = (int(corner_x - dx), int(corner_y - dy))
-            p2 = (int(corner_x + dx), int(corner_y + dy))
+            x0_i = int(round(x0))
+            y0_i = int(round(y0))
+            dx = int(round(long_len * vx))
+            dy = int(round(long_len * vy))
+            p1 = (x0_i - dx, y0_i - dy)
+            p2 = (x0_i + dx, y0_i + dy)
             cv2.line(roi, p1, p2, (255, 0, 0), 2)
 
-        # Rode horizontale referentielijn
-        cv2.line(roi, (cx - L, cy), (cx + L, cy), (0, 0, 255), 2)
+        # teken hoeklijn van corner -> ROI center
+        cv2.line(roi, (corner_x, corner_y), (cx, cy), (0, 255, 0), 2)
+        # teken hoekpunt
+        cv2.circle(roi, (corner_x, corner_y), 6, (0, 255, 0), -1)
+        # teken center
+        cv2.circle(roi, (cx, cy), 4, (0, 0, 255), -1)
+        # toon hoektekst
+        cv2.putText(roi, f"{angle_deg:+.1f}°", (corner_x + 10, corner_y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,255,255), 2)
 
-        # Groene hoeklijn van hoekpunt naar midden
-        cv2.line(roi, corner_point, (cx, cy), (0, 255, 0), 2)
-        cv2.circle(roi, corner_point, 6, (0, 255, 0), -1)
-
-        # Toon hoekwaarde
-        cv2.putText(roi, f"{angle_deg:.1f} deg", (corner_x + 10, corner_y - 10),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-
+    # zet ROI terug in annotated indien gewenst
+    if visualize and annotated is not None and box is not None:
         annotated[y1:y2, x1:x2] = roi
 
     return angle_deg
+
+
 
 
 
@@ -233,7 +268,6 @@ try:
 
         while True:
             try:
-                # Use non-blocking recv to check for incoming messages
                 conn.setblocking(False)
                 try:
                     data = conn.recv(1024).decode().strip()
@@ -254,7 +288,6 @@ try:
                 finally:
                     conn.setblocking(True)
 
-                # CONTINUOUS DETECTION LOOP
                 if check_value:
                     frames = pipe.wait_for_frames()
                     color_frame = frames.get_color_frame()
@@ -262,7 +295,18 @@ try:
                         continue
 
                     color_image = np.asanyarray(color_frame.get_data())
-                    detections, annotated = detect_objects(color_image)
+
+                    # Normaliseer ROI t.o.v. dit frame
+                    x1, y1, x2, y2 = normalize_roi(ROI_COORDS, color_image.shape)
+
+                    # Apply ROI mask (alles buiten ROI zwart)
+                    masked_image = apply_roi_mask(color_image, (x1, y1, x2, y2))
+
+                    # detecties op masked_image (coördinaten refereren nog steeds aan full-image)
+                    detections, annotated = detect_objects(masked_image)
+
+                    # Zorg dat polygon/rect zichtbaar blijft op annotated (indien detect_objects over zwart tekent)
+                    cv2.rectangle(annotated, (x1, y1), (x2, y2), (0, 255, 0), 2)
                     current_annotated = annotated
 
                     towel_boxes = [d for d in detections if "towel" in d[0]]
@@ -305,7 +349,9 @@ try:
                                 continue
 
                             color_image = np.asanyarray(color_frame.get_data())
-                            detections, annotated = detect_objects(color_image)
+                            x1, y1, x2, y2 = normalize_roi(ROI_COORDS, color_image.shape)
+                            masked_image = apply_roi_mask(color_image, (x1, y1, x2, y2))
+                            detections, annotated = detect_objects(masked_image)
                             current_annotated = annotated
 
                             new_corner_boxes = [d for d in detections if "corner" in d[0]]
@@ -314,12 +360,12 @@ try:
 
                             if new_corner_boxes:
                                 for cls_name, conf, bbox in sorted(new_corner_boxes, key=lambda d: d[1], reverse=True):
-                                    ang = detect_corner_angle(color_image, bbox, annotated)
+                                    ang = detect_corner_angle(masked_image, bbox, annotated)
                                     print(f"Attempt {attempt}: tried bbox conf={conf:.3f} -> angle={ang}")
                                     if ang is not None:
                                         candidates.append((conf, bbox, ang))
                             else:
-                                ang = detect_corner_angle(color_image, fallback_bbox, annotated)
+                                ang = detect_corner_angle(masked_image, fallback_bbox, annotated)
                                 print(f"Attempt {attempt}: no new corner detections, tried fallback conf={fallback_conf:.3f} -> angle={ang}")
                                 if ang is not None:
                                     candidates.append((fallback_conf, fallback_bbox, ang))
@@ -328,9 +374,9 @@ try:
                                 candidates.sort(key=lambda x: x[0], reverse=True)
                                 sel_conf, sel_bbox, sel_angle = candidates[0]
 
-                                x1, y1, x2, y2 = sel_bbox
-                                x_center = int((x1 + x2) / 2)
-                                y_center = int((y1 + y2) / 2)
+                                x1_box, y1_box, x2_box, y2_box = sel_bbox
+                                x_center = int((x1_box + x2_box) / 2)
+                                y_center = int((y1_box + y2_box) / 2)
 
                                 corner_found = True
                                 corner_data = (x_center, y_center, sel_angle)
@@ -356,7 +402,7 @@ try:
                         h = int(disp.shape[0] * DISPLAY_SCALE)
                         disp = cv2.resize(disp, (w, h))
 
-                    cv2.imshow("YOLO RealSense - Detectie", disp)
+                    cv2.imshow("YOLO RealSense - Detectie (ROI-only)", disp)
 
                     if towel_found and corner_found:
                         print("Towel and corner found")
@@ -376,7 +422,7 @@ try:
             if corner_found and corner_data:
                 x, y, angle = corner_data
                 xVerwerkt, yverwerkt, zVerwerkt = camera_to_robot(x, y)
-                zVerwerkt2 = zVerwerkt
+                xoud, youd, zVerwerkt2 = camera_to_robotZCoords(x,y)
                 Cverwerkt = cameraAngle_to_doosan(angle)
                 Cverwerkt += 5
                 print(f"Angle: {angle}, verwerkt: {Cverwerkt}")
@@ -398,32 +444,63 @@ try:
         # Bestandsnamen voorbereiden
         save_path_annotated = os.path.join(SAVE_DIR, f"result_{timestamp}_annotated.jpg")
         save_path_raw = os.path.join(SAVE_DIR, f"result_{timestamp}_raw.jpg")
+        save_path_roi_raw = os.path.join(SAVE_DIR, f"result_{timestamp}_roi_raw.jpg")
+        save_path_roi_annot = os.path.join(SAVE_DIR, f"result_{timestamp}_roi_annotated.jpg")
 
+        # Sla annotated full-frame op (eventueel geschaald voor overzicht)
         if current_annotated is not None:
-            # Annotated beeld opslaan
             disp_to_save = current_annotated.copy()
+            # Bewaar full-res ROI apart; deze saved below
             if DISPLAY_SCALE != 1.0:
                 w = int(disp_to_save.shape[1] * DISPLAY_SCALE)
                 h = int(disp_to_save.shape[0] * DISPLAY_SCALE)
                 disp_to_save = cv2.resize(disp_to_save, (w, h))
             cv2.imwrite(save_path_annotated, disp_to_save)
-            print(f"Annotated image opgeslagen als: {save_path_annotated}")
+            print(f"🖼 Annotated image opgeslagen als: {save_path_annotated}")
         else:
-            print("Geen annotated beeld om op te slaan (detectie niet uitgevoerd).")
+            print("⚠️ Geen annotated beeld om op te slaan (detectie niet uitgevoerd).")
 
-        # Probeer de laatste originele frame ook te bewaren
+        # Probeer de laatste originele frame ook te bewaren en aparte ROI-crop
         try:
-            # Probeer het laatste frame van de RealSense pipeline op te halen
             frames = pipe.wait_for_frames()
             color_frame = frames.get_color_frame()
             if color_frame:
                 raw_image = np.asanyarray(color_frame.get_data())
                 cv2.imwrite(save_path_raw, raw_image)
-                print(f"Raw (onnannotated) image opgeslagen als: {save_path_raw}")
+                print(f"📸 Raw (onnannotated) image opgeslagen als: {save_path_raw}")
+
+                # crop ROI van raw_image (gebruik normalize zodat binnen bounds)
+                x1c, y1c, x2c, y2c = normalize_roi(ROI_COORDS, raw_image.shape)
+                if x2c > x1c and y2c > y1c:
+                    roi_raw = raw_image[y1c:y2c, x1c:x2c].copy()
+                    cv2.imwrite(save_path_roi_raw, roi_raw)
+                    print(f"📸 Raw ROI image opgeslagen als: {save_path_roi_raw}")
+                else:
+                    print("⚠️ ROI ongeldig om raw crop op te slaan.")
             else:
-                print("Geen raw frame beschikbaar om op te slaan.")
+                print("⚠️ Geen raw frame beschikbaar om op te slaan.")
         except Exception as e:
-            print(f"Kon raw afbeelding niet opslaan: {e}")
+            print(f"⚠️ Kon raw afbeelding niet opslaan: {e}")
+
+        # Sla ook annotated ROI (uit current_annotated full-res) op
+        try:
+            if current_annotated is not None:
+                # gebruik dezelfde normalization als bij raw
+                # Let op: current_annotated is full-res (niet de later geschaalde versie)
+                # Zorg dat we oorspronkelijke coords gebruiken
+                # We kunnen current_annotated gebruiken omdat we tekende op full-res annotated eerder
+                # (in detect loop current_annotated = annotated, die was full-res)
+                # Herstel full-res coords
+                # Voor de zekerheid: verkrijg huidige frame hoogte/width van annotated zelf
+                x1c, y1c, x2c, y2c = normalize_roi(ROI_COORDS, current_annotated.shape)
+                if x2c > x1c and y2c > y1c:
+                    roi_annot = current_annotated[y1c:y2c, x1c:x2c].copy()
+                    cv2.imwrite(save_path_roi_annot, roi_annot)
+                    print(f"🖼 Annotated ROI image opgeslagen als: {save_path_roi_annot}")
+                else:
+                    print("⚠️ ROI ongeldig om annotated crop op te slaan.")
+        except Exception as e:
+            print(f"⚠️ Kon annotated ROI niet opslaan: {e}")
 
         conn.close()
         print("Connection closed\n")
