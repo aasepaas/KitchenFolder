@@ -474,15 +474,15 @@ def Main():
             for _ in range(18):
                 Cylinder2coords[1] += 5     # alleen Y aanpassen
                 movejx(posx(Cylinder2coords), vel=150, acc=350, sol=2, radius=1.5)
-            wait(0.05)
+            wait(0.1)
             set_digital_output(4, OFF) ##Second arm gripper #ON is open
-            wait(0.02)
+            wait(0.1)
             Steps = 10
 
         ##step 10 move through the 2nd gripper up 
         elif Steps == 10: 
             movejx(RobotUpThroughCylinder,vel=50,acc=95,sol = 2)
-            wait(0.01)
+            wait(0.1)
             Steps = 11
         
         ##step 11 feed the 3rd cylinder and gripper
@@ -499,9 +499,9 @@ def Main():
                 #Straight2gripperholdTEST2 = posx(1041.54, yChangeable, 52.24, 84.44, -157.21, 26.94)
                 #movejx(Straight2gripperholdTEST2,vel=100,acc=250,sol=2)
             set_digital_output(6, OFF) ##Second arm cilinder #NO
-            wait(0.05)
+            wait(0.1)
             set_digital_output(2, ON)  ##robot arm gripper #ON is open to suck 
-            wait(0.02)
+            wait(0.1)
             Steps = 12
             
         ##step 12 move slightly away from the 3rd gripper
