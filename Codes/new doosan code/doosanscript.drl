@@ -294,7 +294,9 @@ endOTabelCoordsLoweredTest2anglecilinderfurthertotable = [1066.22, 5 ,55.41,168.
 Cylinder2coords = [1084.7, 11.07, 54.35, 8.34, -164.36, 51.22]
 
 ##step 10
-RobotUpThroughCylinder = posx([999.13,-34.79,460,38.47,167.50, 89.73])
+#RobotUpThroughCylinder = posx([999.13,-34.79,460,38.47,167.50, 89.73])
+
+RobotUpThroughCylinder = posx([999.13, 10.79,460,38.47,167.50, 89.73])
 
 LinearAxisUpTEST = posx([999.13,-34.79,450,38.47,167.50, 89.73])
 
@@ -407,7 +409,7 @@ def Main():
                 firstRun = False
             else:
                 set_digital_output(3, ON, 2, OFF) #towel blower away
-                set_digital_output(1, ON, 2.2, OFF) #Second arm cilinder  #off extended
+                set_digital_output(1, ON, 1.5, OFF) #Second arm cilinder  #off extended
             CheckForCorner = True
             resp, recv = client_socket_read(sock)
             client_socket_close(sock)
@@ -433,6 +435,8 @@ def Main():
             
         ##step 5 go to the corner and same height
         elif Steps == 5: ##Move to edge of table
+            set_digital_output(1, OFF) ##Second and third arm cilinder #NO
+            set_digital_output(3, OFF) ##Second and third arm cilinder #NO
             PickupCoords = posx([XfirstCorner,YfirstCorner,ZfirstCorner,AngleA,AngleB,AngleC])
             movejx(PickupCoords,vel=100,acc=250,sol=2)
             Steps = 6
@@ -474,15 +478,48 @@ def Main():
             for _ in range(18):
                 Cylinder2coords[1] += 5     # alleen Y aanpassen
                 movejx(posx(Cylinder2coords), vel=150, acc=350, sol=2, radius=1.5)
-            wait(0.1)
+            wait(0.2)
+            noTowel = False
+            PhotoCellSensor = get_digital_input(2)
+            if(PhotoCellSensor):
+                    noTowel = False
+            else:
+                    noTowel = True
             set_digital_output(4, OFF) ##Second arm gripper #ON is open
-            wait(0.1)
-            Steps = 10
+           
+            if (noTowel):
+                Steps = 209
+            else:
+                Steps = 10
+            #Cylinder2coords = [1084.7, 123.07, 54.35, 8.34, -164.36, 51.22]
+            #Cylinder2coordsbefore =  [1084.7, 5.07, 54.35, 8.34, -164.36, 51.22]
+            #endOTabelCoordsLoweredTest2anglecilinderfurthertotable = [1066.22, 0 ,55.41,168.70,162.28,-143.50]
+            #moveToCylinder = True
+            #NoTowel = False
+            #motionDone = False
+            #movejx(Cylinder2coordsbefore, vel =140, acc=300, sol=2)
+            #amovejx(Cylinder2coords,vel=25,acc=100,sol = 2)
+            #while(not motionDone):
+                #PhotoCellSensor = get_digital_input(2)
+                #if(PhotoCellSensor):
+                    #stop(DR_SSTOP)
+                    #motionDone = True
+                #elif(check_motion() == 0):
+                    #motionDone = True
+                    #NoTowel = True
+            #if(NoTowel):
+                #Steps = 209
+            #else:
+                #wait(0.05)
+                #set_digital_output(4, OFF) ##Second arm gripper #ON is open
+                #wait(0.02)
+                #Steps = 10
 
         ##step 10 move through the 2nd gripper up 
         elif Steps == 10: 
             movejx(RobotUpThroughCylinder,vel=50,acc=95,sol = 2)
             wait(0.1)
+            
             Steps = 11
         
         ##step 11 feed the 3rd cylinder and gripper
@@ -526,7 +563,7 @@ def Main():
             
         ##step 15 let go of both cylinder grippers
         elif Steps == 15:
-         
+            set_digital_output(3, ON) ##Second and third arm cilinder #NO
             
             Steps = 1        
        
@@ -540,7 +577,17 @@ def Main():
         ##step 105 go back to the start
         elif Steps == 105:
             Steps = 0
-         
+            set_digital_output(2, ON)  ##robot arm gripper #ON is open to suck 
+            
+        elif Steps == 209:
+            set_digital_output(2, ON)  ##robot arm gripper #ON is open to suck 
+            set_digital_output(4, ON)  ##robot arm gripper #ON is open to suck 
+            set_digital_output(3, ON)  ##robot arm gripper #ON is open to suck
+            wait(3)
+            set_digital_output(3, OFF)  ##robot arm gripper #ON is open to suck
+            Steps = 0
+
+            
         ##default step if it has wrong value go back to start
         else:
             Steps = 0
