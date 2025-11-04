@@ -1,5 +1,3 @@
-
-
 from DRCF import *
 ## --- Variabelen ---
 Steps = 0
@@ -37,53 +35,25 @@ acc400 = 400
 ##step 1
 startpos = posx([572.52, -542.23, 219.95, AngleA, AngleB, 180])
 ##step 8
-#endOTabelCoords = posx([1106.4,-63.7,430.60,AngleA,AngleB, 180])
 endOTabelCoords = posx([1106.4,-63.7,430.60,173.83,-136.27, -41.38])
 
 endOTabelCoords = posx([1106.4,-200.7,430.60,173.83,-136.27, -41.38])
 
 ##step 9
-##endOTabelCoordsLoweredTest2anglecilinderfurthertotable = posx([1078.44,5, 51.72, 90.32, -151.68, 44.76])
 
 endOTabelCoordsLoweredTest2anglecilinderfurthertotable = [1066.22, 5 ,55.41,168.70,162.28,-143.50]
 Cylinder2coords = [1084.7, 11.07, 54.35, 8.34, -164.36, 51.22]
 
 ##step 10
-#RobotUpThroughCylinder = posx([999.13,-34.79,460,38.47,167.50, 89.73])
 
 RobotUpThroughCylinder = posx([999.13, 10.79,460,38.47,167.50, 89.73])
 
 LinearAxisUpTEST = posx([999.13,-34.79,450,38.47,167.50, 89.73])
 
 ##step 11
-##Straight2gripperholdTEST2 = posx(1041.54, -277, 52.24, 84.44, -157.21, 26.94)
 Straight2gripperholdTEST2 = [1027.29, -240, 69.46, 58.18, -178.21, 78.94]
 #step 12
-#AfterThirdGripper = posx(1001.54, -167.64, 150.24, 58.44, -178.21, 78.94)
 AfterThirdGripper = posx(1027.54, -220.64, 120.24, 58.44, -178.21, 78.94)
-
-
-
-
-#endOTabelCoordsLowered = posx([1002.33, 48.67,49.31,2.26,174.24,42.87])
-#LinearAxisCoords = posx([997.01,104.15,50.7,172.28,-170.45,-141.12])
-#LinearAxisUp = posx([976.13,100.2,441.48,174.29,-161.52, -142.01])
-#Straight2gripperhold = posx([1014.8,-270.17,52.88,102.45,-176.02, 157.11])
-#
-#endOTabelCoordsLoweredTest1anglecilinderclosertotable = posx([940.77, 36.24,46.79,175.81,-157.52,-142.49])
-#LinearAxisCoordsTest1 = posx([943.52,96.78,47.40, 0.71, 156.91, 39.72])
-#
-#LinearAxisUpTEST = posx([999.13,-34.79,450,38.47,167.50, 89.73])
-#Straight2gripperholdTEST = posx([1052.83, -334.49, 56.66, 127.75, -170.23, 83.71])
-#endpos = posx([564.97, -328.08, 49.12, 71.92, -176.12, 23.28])
-#endpos = posx([524.97, -376.08, 45.12, 59.92, -171.12, 7.06])
-#
-###test coordinates of fixed corner placement
-#testAboveCorner = posx([503.22,-738.16,70.2,92.27,-176.14,-106.86])
-#testOnCorner = posx([503.22,-738.16,22.94,92.27,-176.14,-106.86])
-#testRaisedSuckedCOrner = posx([503.22,-738.16,42.2,92.27,-176.14,-106.86])
-#testAfterClamped = posx([503.22,-738.16,100,92.27,-176.14,-106.86])
-
 
 
 sock = None
@@ -185,6 +155,7 @@ def Main():
                 
         ##step 4 move to slightly higher than the corner coords
         elif Steps == 4: 
+
             PickupCoordsAbove = posx([XfirstCorner,YfirstCorner,55.2,AngleA,AngleB,AngleC])
             movejx(PickupCoordsAbove,vel150,acc400,sol=2)
             Steps = 5
@@ -250,30 +221,6 @@ def Main():
                 Steps = 209
             else:
                 Steps = 10
-            #Cylinder2coords = [1079.7, 123.07, 59.35, 8.34, -164.36, 51.22]
-            #Cylinder2coordsbefore =  [1079.7, 5.07, 59.35, 8.34, -164.36, 51.22]
-            #endOTabelCoordsLoweredTest2anglecilinderfurthertotable = [1066.22, 0 ,55.41,168.70,162.28,-143.50]
-            #moveToCylinder = True
-            #NoTowel = False
-            #motionDone = False
-            #movejx(Cylinder2coordsbefore, vel =140, acc=300, sol=2)
-            #amovejx(Cylinder2coords,vel=25,acc=100,sol = 2)
-            #while(not motionDone):
-                #PhotoCellSensor = get_digital_input(2)
-                #if(PhotoCellSensor):
-                    #stop(DR_QSTOP_STO)
-                    ##wait(10)
-                    #motionDone = True
-                #elif(check_motion() == 0):
-                    #motionDone = True
-                    #NoTowel = True
-            #if(NoTowel):
-                #Steps = 209
-            #else:
-                #wait(0.05)
-                #set_digital_output(4, OFF) ##Second arm gripper #ON is open
-                #wait(0.02)
-                #Steps = 10
 
         ##step 10 move through the 2nd gripper up 
         elif Steps == 10: 
@@ -289,12 +236,7 @@ def Main():
             for _ in range(17):
                 Straight2gripperholdTEST2[1] -= 5     # alleen Y aanpassen
                 movejx(posx(Straight2gripperholdTEST2), vel=150, acc=380, sol=2, radius=1.5)
-            #yChangeable = -192    
-            #Straight2gripperholdTEST2 = posx(1041.54, yChangeable, 52.24, 84.44, -157.21, 26.94)
-            #for x in range(17):
-                #yChangeable = yChangeable - 5
-                #Straight2gripperholdTEST2 = posx(1041.54, yChangeable, 52.24, 84.44, -157.21, 26.94)
-                #movejx(Straight2gripperholdTEST2,vel=100,acc=250,sol=2)
+
             set_digital_output(6, OFF) ##Second arm cilinder #NO
             wait(0.1)
             set_digital_output(2, ON)  ##robot arm gripper #ON is open to suck 
@@ -338,7 +280,7 @@ def Main():
         elif Steps == 105:
             Steps = 0
             set_digital_output(2, ON)  ##robot arm gripper #ON is open to suck 
-            
+       ##step 209 if no towel is detected at the photocell sensor     
         elif Steps == 209:
             set_digital_output(2, ON)  ##robot arm gripper #ON is open to suck 
             set_digital_output(4, ON)  ##robot arm gripper #ON is open to suck 
