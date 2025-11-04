@@ -46,7 +46,6 @@ ROI_COORDS = (521, 850, 1662, 60)
 # =====================================================================
 
 def normalize_roi(coords, img_shape):
-    """Zorg dat coords in vorm (x1,y1,x2,y2) zijn, x1<x2, y1<y2 en binnen beeldgrootte."""
     h, w = img_shape[:2]
     x1, y1, x2, y2 = map(int, coords)
     # swap indien nodig
@@ -62,7 +61,6 @@ def normalize_roi(coords, img_shape):
     return x1, y1, x2, y2
 
 def apply_roi_mask(image, roi):
-    """Zet alles buiten roi op zwart (roi = (x1,y1,x2,y2)). Teken ook groene rand."""
     x1, y1, x2, y2 = roi
     h, w = image.shape[:2]
     mask = np.zeros((h, w), dtype=np.uint8)
@@ -107,6 +105,7 @@ def detect_objects(image):
 
 
 def detect_corner_angle(roi_image, box=None, annotated=None, visualize=True):
+
     # Zorg dat we roi hebben als crop
     if box is not None and roi_image is not None and annotated is not None:
         x1, y1, x2, y2 = box
@@ -168,22 +167,10 @@ def detect_corner_angle(roi_image, box=None, annotated=None, visualize=True):
     else:
         avg_ang = np.arctan2(sy, sx)
 
+    # raw angle in degrees (0 means pointing right, positive up)
     raw_deg = np.degrees(avg_ang)
-    if raw_deg > 90:
-        raw_deg -= 180
-    elif raw_deg <= -90:
-        raw_deg += 180
-    angle_deg = raw_deg
-
-    # ❗❗ NIEUWE CHECK: alleen hoeken tussen -45° en +45° worden geaccepteerd
-    if angle_deg < -45 or angle_deg > 45:
-        if visualize:
-            cv2.putText(roi, f"Angle {angle_deg:.1f}° out of range", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
-            if annotated is not None and box is not None:
-                annotated[y1:y2, x1:x2] = roi
-        return None
-    # ✅ EINDE NIEUWE CHECK
+    # normaliseer basiswaarde naar (-180,180]
+    base_angle = ((raw_deg + 180) % 360) - 180
 
     # Bereken snijpunt van lijnen als hoekpunt
     def line_to_params(vx, vy, x0, y0):
@@ -203,20 +190,27 @@ def detect_corner_angle(roi_image, box=None, annotated=None, visualize=True):
         yi = (c1 * a2 - c2 * a1) / det
         corner_x, corner_y = int(round(xi)), int(round(yi))
 
-    mid_x = w // 2
-    if corner_x < mid_x:
-        if visualize:
-            cv2.putText(roi, "Corner LEFT - ignored", (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0,0,255), 2)
-            cv2.line(roi, (mid_x, 0), (mid_x, h), (0,0,0), 2)
-            cv2.line(roi, (0, cy), (w, cy), (0,0,255), 2)
-            if annotated is not None and box is not None:
-                annotated[y1:y2, x1:x2] = roi
-        return None
+    # Om de 180°-ambiguïteit te fixen: maak twee kandidaten (base_angle en base_angle +/- 180)
+    alt_angle = ((base_angle + 180) + 180) % 360 - 180  # base_angle +/- 180 normalized
+    candidates = [base_angle, alt_angle]
 
+    # Bereken richting van het hoekpunt t.o.v. het midden van de ROI
+    vec_x = corner_x - cx
+    vec_y = cy - corner_y  # y-omkering zodat positieve hoek omhoog blijft zoals raw_deg
+    if vec_x == 0 and vec_y == 0:
+        chosen_angle = base_angle
+    else:
+        corner_dir_deg = ((np.degrees(np.arctan2(vec_y, vec_x)) + 180) % 360) - 180
+        # Kies kandidaat die het dichtst bij hoekrichting ligt (minimale absolute afwijking)
+        diffs = [abs(((c - corner_dir_deg + 180) % 360) - 180) for c in candidates]
+        chosen_angle = candidates[int(np.argmin(diffs))]
+
+    angle_deg = chosen_angle  # deze waarde geven we terug
+
+    # Visualisatie
     if visualize:
         cv2.line(roi, (0, cy), (w, cy), (0, 0, 255), 2)
-        cv2.line(roi, (mid_x, 0), (mid_x, h), (0, 0, 0), 2)
+        cv2.line(roi, (w//2, 0), (w//2, h), (0, 0, 0), 2)
         long_len = max(w, h)
         for (vx, vy, x0, y0) in lines:
             x0_i = int(round(x0))
@@ -236,7 +230,6 @@ def detect_corner_angle(roi_image, box=None, annotated=None, visualize=True):
         annotated[y1:y2, x1:x2] = roi
 
     return angle_deg
-
 
 
 
@@ -449,9 +442,9 @@ try:
                 h = int(disp_to_save.shape[0] * DISPLAY_SCALE)
                 disp_to_save = cv2.resize(disp_to_save, (w, h))
             cv2.imwrite(save_path_annotated, disp_to_save)
-            print(f"🖼 Annotated image opgeslagen als: {save_path_annotated}")
+            print(f"Annotated image opgeslagen als: {save_path_annotated}")
         else:
-            print("⚠️ Geen annotated beeld om op te slaan (detectie niet uitgevoerd).")
+            print("Geen annotated beeld om op te slaan (detectie niet uitgevoerd).")
 
         # Probeer de laatste originele frame ook te bewaren en aparte ROI-crop
         try:
@@ -460,40 +453,34 @@ try:
             if color_frame:
                 raw_image = np.asanyarray(color_frame.get_data())
                 cv2.imwrite(save_path_raw, raw_image)
-                print(f"📸 Raw (onnannotated) image opgeslagen als: {save_path_raw}")
+                print(f"Raw (onnannotated) image opgeslagen als: {save_path_raw}")
 
                 # crop ROI van raw_image (gebruik normalize zodat binnen bounds)
                 x1c, y1c, x2c, y2c = normalize_roi(ROI_COORDS, raw_image.shape)
                 if x2c > x1c and y2c > y1c:
                     roi_raw = raw_image[y1c:y2c, x1c:x2c].copy()
                     cv2.imwrite(save_path_roi_raw, roi_raw)
-                    print(f"📸 Raw ROI image opgeslagen als: {save_path_roi_raw}")
+                    print(f"Raw ROI image opgeslagen als: {save_path_roi_raw}")
                 else:
-                    print("⚠️ ROI ongeldig om raw crop op te slaan.")
+                    print("ROI ongeldig om raw crop op te slaan.")
             else:
-                print("⚠️ Geen raw frame beschikbaar om op te slaan.")
+                print("Geen raw frame beschikbaar om op te slaan.")
         except Exception as e:
-            print(f"⚠️ Kon raw afbeelding niet opslaan: {e}")
+            print(f"Kon raw afbeelding niet opslaan: {e}")
 
         # Sla ook annotated ROI (uit current_annotated full-res) op
         try:
             if current_annotated is not None:
-                # gebruik dezelfde normalization als bij raw
-                # Let op: current_annotated is full-res (niet de later geschaalde versie)
-                # Zorg dat we oorspronkelijke coords gebruiken
-                # We kunnen current_annotated gebruiken omdat we tekende op full-res annotated eerder
-                # (in detect loop current_annotated = annotated, die was full-res)
-                # Herstel full-res coords
-                # Voor de zekerheid: verkrijg huidige frame hoogte/width van annotated zelf
+
                 x1c, y1c, x2c, y2c = normalize_roi(ROI_COORDS, current_annotated.shape)
                 if x2c > x1c and y2c > y1c:
                     roi_annot = current_annotated[y1c:y2c, x1c:x2c].copy()
                     cv2.imwrite(save_path_roi_annot, roi_annot)
-                    print(f"🖼 Annotated ROI image opgeslagen als: {save_path_roi_annot}")
+                    print(f"Annotated ROI image opgeslagen als: {save_path_roi_annot}")
                 else:
-                    print("⚠️ ROI ongeldig om annotated crop op te slaan.")
+                    print("ROI ongeldig om annotated crop op te slaan.")
         except Exception as e:
-            print(f"⚠️ Kon annotated ROI niet opslaan: {e}")
+            print(f"Kon annotated ROI niet opslaan: {e}")
 
         conn.close()
         print("Connection closed\n")
